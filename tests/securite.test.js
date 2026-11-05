@@ -22,7 +22,7 @@ function tousLesFichiersJs(dossier = RACINE, trouves = []) {
 
 test('aucun token ni clé écrit en dur dans le code', () => {
   const motifs = [
-    /MTU2NzkwODQ0OTY1NDkzOTc5MA/,          // id du bot collé par erreur
+    /MTU2Nzkw[A-Za-z0-9]{6,}/,               // préfixe d'un token Discord
     /github_pat_/,                          // jeton GitHub
     /["'][A-Za-z0-9_-]{24}\.[A-Za-z0-9_-]{6}\.[A-Za-z0-9_-]{27,}["']/, // token Discord
     /sk-[A-Za-z0-9]{32,}/,                  // clé façon OpenAI
