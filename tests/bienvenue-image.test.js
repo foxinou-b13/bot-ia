@@ -234,39 +234,93 @@ test('toutes les commandes sont chargées, y compris la nouvelle', () => {
   assert.ok(chargerCommandes().commandes.has('image-bienvenue'), 'commande non enregistrée');
 });
 
-// ─── bouton « 📱 Choisir ton image » (ouvre la commande → galerie/PC) ───
-test('carte du fond : le bouton lien ouvre la commande quand son ID est connu', () => {
-  const carte = config.carteReglage('G-BI', 'accueil', 'fond', 'C1', null, { urlChoix: 'discord://?cmd=42' });
+// ─── le parcours « 📱 Choisir ton image » (MP, sélecteur natif du client) ───
+test('la carte du fond propose le bouton 📱 (vrai bouton, plus de lien externe)', () => {
+  stockage.majReglages('G-BI', { bienvenue: { fond: null } });
+  const carte = config.carteReglage('G-BI', 'accueil', 'fond', 'C1', null);
   const boutons = carte.components[0].toJSON().components;
-  const lien = boutons.find((b) => b.style === 5);
-  assert.ok(lien, 'bouton lien absent');
-  assert.strictEqual(lien.url, 'discord://?cmd=42');
-  assert.ok(!lien.custom_id, 'un bouton lien ne prend pas de custom_id');
+  assert.ok(boutons.some((b) => b.custom_id === 'cfg:accueil:fond-pj' && b.style === 1),
+    'le bouton « Choisir ton image » doit être un bouton normal et visible');
+  assert.ok(!boutons.some((b) => b.style === 5), 'plus aucun bouton-lien externe');
 });
 
-test('carte du fond : sans ID de commande, pas de bouton lien (repli propre)', () => {
-  const carte = config.carteReglage('G-BI', 'accueil', 'fond', 'C1', null, {});
-  const boutons = carte.components[0].toJSON().components;
-  assert.ok(!boutons.some((b) => b.style === 5), 'bouton lien inventé');
-  assert.ok(boutons.some((b) => b.custom_id === 'cfg:accueil:fond-url'), 'le repli URL doit rester');
+const choixFond = require('../utils/choix-fond');
+
+test('bouton 📱 : le bot envoie un MP et met l\'admin en attente d\'image', async () => {
+  const inter = selecteur('cfg:accueil:fond-pj', { isButton: () => true });
+  let envoye = null;
+  inter.user.send = async (p) => { envoye = p; };
+  await config.composant(inter);
+  assert.ok(envoye && /galerie/.test(envoye.content), 'le MP doit expliquer le 📎 galerie');
+  assert.ok(choixFond.chercherEnAttente('u'), 'l\'attente doit être enregistrée');
+  const note = inter.journal.find(([t]) => t === 'update')[1].embeds[0].toJSON().description;
+  assert.ok(/message privé/.test(note), note);
 });
 
-test('lienCommandeImage : trouve l\'ID, le met en cache, pardonne les pannes', async () => {
-  let appels = 0;
-  const clientBon = {
-    application: { commands: { async fetch() { appels += 1; return [{ name: 'config', id: '1' }, { name: 'image-bienvenue', id: '777' }]; } } },
+test('MP avec une image : vérifiée, enregistrée, aperçu renvoyé, attente levée', async () => {
+  const G2 = 'G-DMFOND-OK';
+  stockage.majReglages(G2, { bienvenue: { langue: 'fr' } });
+  choixFond.__enAttente.set('dm1', { guildId: G2, expire: Date.now() + 60000 });
+  const original = img.chargerImage;
+  img.chargerImage = async () => {
+    const { createCanvas } = require('@napi-rs/canvas');
+    const c = createCanvas(600, 900); const x = c.getContext('2d');
+    x.fillStyle = '#d98fae'; x.fillRect(0, 0, 600, 900);
+    return c.toBuffer('image/png');
   };
-  const url = await config.lienCommandeImage(clientBon);
-  assert.strictEqual(url, 'discord://?cmd=777', url);
-  const url2 = await config.lienCommandeImage(clientBon);
-  assert.strictEqual(url2, url);
-  assert.strictEqual(appels, 1, 'le cache doit éviter un second appel réseau');
+  try {
+    let reponse = null;
+    const message = {
+      author: { id: 'dm1', bot: false, username: 'Nina' },
+      attachments: { values: () => [{ url: 'https://cdn.discordapp.com/attachments/1/2/fond.png', content_type: 'image/png', size: 12000 }] },
+      async reply(p) { reponse = p; return {}; },
+    };
+    const pris = await choixFond.traiterMp(message);
+    assert.strictEqual(pris, true);
+    assert.strictEqual(stockage.reglages(G2).bienvenue.fond, 'https://cdn.discordapp.com/attachments/1/2/fond.png');
+    assert.ok(reponse.files?.length && reponse.files[0].attachment[0] === 0x89, 'aperçu PNG attendu');
+    assert.strictEqual(choixFond.chercherEnAttente('dm1'), null, 'l\'attente doit être levée');
+  } finally { img.chargerImage = original; choixFond.__enAttente.delete('dm1'); }
+});
 
-  const clientCasse = { application: { commands: { async fetch() { throw new Error('réseau KO'); } } } };
-  // le cache est encore valide → pas de panne visible ; après expiration, repli silencieux sur null
-  config.__viderCacheLien && config.__viderCacheLien();
-  const urlKo = await config.lienCommandeImage(clientCasse);
-  assert.ok(urlKo === null || urlKo.startsWith('discord://'), 'résultat inattendu en cas de panne : ' + urlKo);
+test('MP sans image : on redemande poliment, l\'attente reste ouverte', async () => {
+  choixFond.__enAttente.set('dm2', { guildId: 'G-X', expire: Date.now() + 60000 });
+  let reponse = null;
+  const message = {
+    author: { id: 'dm2', bot: false, username: 'Zoé' },
+    attachments: { values: () => [] },
+    async reply(p) { reponse = p; return {}; },
+  };
+  const pris = await choixFond.traiterMp(message);
+  assert.strictEqual(pris, true);
+  assert.ok(/pièce jointe|galerie/.test(reponse.content), reponse && reponse.content);
+  assert.ok(choixFond.chercherEnAttente('dm2'), 'l\'attente doit rester ouverte pour réessayer');
+  choixFond.__enAttente.delete('dm2');
+});
+
+test('MP : un message qui ne vient pas d\'un admin en attente est ignoré', async () => {
+  const message = { author: { id: 'inconnu', bot: false }, attachments: { values: () => [] }, async reply() { throw new Error('ne doit pas répondre'); } };
+  assert.strictEqual(await choixFond.traiterMp(message), false);
+});
+
+test('MP : image trop lourde → refus propre, rien d\'enregistré', async () => {
+  const G3 = 'G-DMFOND-LOURDE';
+  choixFond.__enAttente.set('dm3', { guildId: G3, expire: Date.now() + 60000 });
+  let reponse = null;
+  const message = {
+    author: { id: 'dm3', bot: false, username: 'Max' },
+    attachments: { values: () => [{ url: 'https://cdn.discordapp.com/attachments/1/3/gros.png', content_type: 'image/png', size: 20 * 1024 * 1024 }] },
+    async reply(p) { reponse = p; return {}; },
+  };
+  await choixFond.traiterMp(message);
+  assert.ok(/trop lourde|illisible/.test(reponse.content), reponse && reponse.content);
+  assert.strictEqual(stockage.reglages(G3).bienvenue.fond, null);
+  choixFond.__enAttente.delete('dm3');
+});
+
+test('attente expirée : plus personne en file au bout de 10 minutes', () => {
+  choixFond.__enAttente.set('dm4', { guildId: 'G-X', expire: Date.now() - 1 });
+  assert.strictEqual(choixFond.chercherEnAttente('dm4'), null);
 });
 
 module.exports = { nom: 'bienvenue-image', cas };

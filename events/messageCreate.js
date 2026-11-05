@@ -61,7 +61,12 @@ module.exports = {
 
   async executer(client, message) {
     if (!message || message.author?.bot) return;
-    if (!message.guild) return;                       // on ignore les MP
+    if (!message.guild) {
+      // seul cas de MP utile : l'admin envoie son image pour le fond de bienvenue
+      const choixFond = require('../utils/choix-fond');
+      await choixFond.traiterMp(message);
+      return;
+    }
 
     const reglages = stockage.reglages(message.guild.id);
     const estStaff = typeof message.member?.permissions?.has === 'function'

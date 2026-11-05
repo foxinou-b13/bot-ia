@@ -42,23 +42,7 @@ const MODULES = {
  * en cas d'indisponibilité, on l'omet simplement — le champ URL et la commande
  * tapée à la main restent des solutions de repli.
  */
-let lienCache = { url: null, expire: 0 };
-async function lienCommandeImage(client) {
-  const maintenant = Date.now();
-  if (lienCache.expire > maintenant) return lienCache.url;
-  try {
-    const collecte = await client?.application?.commands?.fetch?.();
-    const cmd = collecte && typeof collecte.find === 'function'
-      ? collecte.find((c) => c.name === 'image-bienvenue')
-      : null;
-    if (!cmd) { lienCache = { url: null, expire: maintenant + 120000 }; return null; }
-    lienCache = { url: `discord://?cmd=${cmd.id}`, expire: maintenant + 600000 };
-    return lienCache.url;
-  } catch {
-    lienCache = { url: null, expire: maintenant + 120000 };
-    return null;
-  }
-}
+
 
 // ─── les rubriques, et dans chaque rubrique : un réglage = une carte ───
 const RUBRIQUES = {
@@ -81,7 +65,7 @@ const RUBRIQUES = {
       },
       fond: {
         label: '🖼️ Image de fond de la carte',
-        desc: 'Le décor derrière la photo du nouveau.\n• **Rien à faire par défaut** : le bot utilise l\'image prévue pour ton serveur (prairie de cosmos).\n• **Envie d\'une autre image** ? Touche « 📱 Choisir ton image » : la galerie du téléphone s\'ouvre (sur PC : le dossier des fichiers), tu sélectionnes, tu envoies. Quelle que soit sa taille ou sa forme, le bot la recadre tout seul au format exact de la carte (1280×720) et t\'envoie un aperçu.\n• « 🧹 Revenir au fond par défaut » remet la prairie si tu ne veux plus de ton image.',
+        desc: 'Le décor derrière la photo du nouveau.\n• **Rien à faire par défaut** : le bot utilise l\'image prévue pour ton serveur (prairie de cosmos).\n• **Envie d\'une autre image ?** Touche « 📱 Choisir ton image » : je t\'écris en **message privé** — là, tu fais comme d\'habitude : 📎 → galerie (téléphone) ou fichiers (PC) → tu envoies. Je vérifie, j\'enregistre, et je te renvoie l\'aperçu réel de la carte. Aucune URL à recopier.\n• « 🔗 Adresse d\'image » : si tu préfères coller un lien direct. « 🌸 Fond par défaut » : pour y revenir à tout moment.',
       },
       message: {
         label: '✏️ Message d\'accroche',
@@ -249,15 +233,12 @@ function carteRubrique(G, sec, channelId, note) {
 }
 
 // ─── la carte PROPRE d'un réglage : description + valeur + son seul contrôle ───
-function boutonFondPersonnalisee(opts = {}) {
-  const rangee = [];
-  if (opts.urlChoix) {
-    rangee.push(new ButtonBuilder().setStyle(ButtonStyle.Link).setURL(opts.urlChoix)
-      .setLabel('Choisir ton image').setEmoji('📱'));
-  }
-  rangee.push(bouton('cfg:accueil:fond-url', 'Adresse d\'image (URL)', '🔗', ButtonStyle.Secondary),
-    bouton('cfg:accueil:fond-off', 'Fond par défaut', '🌸'));
-  return rangee;
+function boutonFondPersonnalisee() {
+  return [
+    bouton('cfg:accueil:fond-pj', 'Choisir ton image', '📱', ButtonStyle.Primary),
+    bouton('cfg:accueil:fond-url', 'Adresse d\'image (URL)', '🔗'),
+    bouton('cfg:accueil:fond-off', 'Fond par défaut', '🌸'),
+  ];
 }
 
 function carteReglage(G, sec, cle, channelId, note = null, opts = {}) {
@@ -295,7 +276,7 @@ function carteReglage(G, sec, cle, channelId, note = null, opts = {}) {
       )));
   } else if (sec === 'accueil' && cle === 'fond') {
     embed.addFields({ name: 'Actuellement', value: b.fond ? `🖼️ image perso : <${b.fond}>` : '🌸 fond par défaut du serveur (cosmos)' });
-    rows.push(rang(...boutonFondPersonnalisee(opts)));
+    rows.push(rang(...boutonFondPersonnalisee()));
   } else if (sec === 'accueil' && cle === 'message') {
     embed.addFields({ name: 'Actuellement', value: b.message ? `\`${String(b.message).slice(0, 90)}\`` : '_le message standard_\n> ' + MESSAGE_DEFAUT.slice(0, 90) });
     rows.push(rang(bouton('cfg:accueil:msg', 'Écrire le message', '✏️', ButtonStyle.Primary),
@@ -456,6 +437,25 @@ module.exports = {
     if (id === 'cfg:accueil:fond-url') {
       return ouvrirFondModal(interaction);
     }
+    if (id === 'cfg:accueil:fond-pj') {
+      const choixFond = require('../utils/choix-fond');
+      let note;
+      try {
+        choixFond.demander(interaction);
+        await interaction.user.send({
+          content: '🖼️ **Envoie-moi l\'image de fond** que tu veux pour la carte de bienvenue : '
+            + 'touche 📎 sous ce message → galerie sur téléphone, fichiers sur PC → tu envoies.\n'
+            + 'Si rien ne se passe, réponds à ce message avec l\'image (appui long → Répondre).\n'
+            + 'Je vérifie, j\'enregistre, et je te montre l\'aperçu réel de la carte. '
+            + '⏱️ Tu as 10 minutes — sinon, ce MP s\'oublie tout seul.',
+        });
+        note = '📨 Je t\'ai écrit en message privé : envoie l\'image dedans, je m\'occupe du reste.';
+      } catch {
+        note = '⚠️ Tu m\'as fermé les messages privés — réouvre-les, ou utilise « /image-bienvenue » '
+          + '(joins l\'image dans la commande) ou « 🔗 Adresse d\'image ».';
+      }
+      return montrer(note);
+    }
     if (id === 'cfg:accueil:fond-modal') {
       const brut = String(interaction.fields?.getTextInputValue('url') || '').trim();
       const verdict = bienvenueImage.validerUrlFond(brut);
@@ -577,8 +577,6 @@ module.exports = {
   SECTIONS,
   RUBRIQUES,
   panneauPrincipal,
-  lienCommandeImage,
-  __viderCacheLien: () => { lienCache = { url: null, expire: 0 }; },   // pour les tests uniquement
   ecranCourant,
   carteRubrique,
   carteReglage,
@@ -602,11 +600,7 @@ async function ouvrirFondModal(interaction) {
 
 /** Rafraîchit l'écran courant (ou l'envoie si le message d'origine n'est plus éditable). */
 async function rafraichir(interaction, note, forcerRubrique = false) {
-  const opts = {};
-  if (carteFondAffichee(interaction.guildId, forcerRubrique)) {
-    opts.urlChoix = await lienCommandeImage(interaction.client);
-  }
-  const paquet = ecranCourant(interaction.guildId, interaction.channelId, note, forcerRubrique, opts);
+  const paquet = ecranCourant(interaction.guildId, interaction.channelId, note, forcerRubrique);
   try {
     await interaction.update(paquet);
   } catch {
