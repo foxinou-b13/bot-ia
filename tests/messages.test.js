@@ -98,7 +98,7 @@ test('mention suivie d\'une question : l\'IA répond', async () => {
   const texte = carte.data ? carte.data.description : carte.description;
   assert.strictEqual(texte, 'Réponse de test.');
   const pied = carte.data ? carte.data.footer : carte.footer;
-  assert.ok(pied?.text && /réponse en .* s/.test(pied.text), 'le temps de réponse doit être affiché');
+  assert.ok(!pied, 'aucun tag ne doit apparaître sous la carte');
 });
 
 test('une très longue réponse IA est découpée', async () => {

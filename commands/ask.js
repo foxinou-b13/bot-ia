@@ -46,7 +46,6 @@ module.exports = {
 
     await interaction.deferReply();
 
-    const debut = Date.now();
     try {
       let { texte, fournisseur } = await ia.demander({
         systeme: ia.consigneSysteme({
@@ -79,19 +78,16 @@ module.exports = {
       ia.memoriser(interaction.guildId, interaction.channelId, 'user', question);
       ia.memoriser(interaction.guildId, interaction.channelId, 'assistant', texte);
 
-      const secondes = ((Date.now() - debut) / 1000).toFixed(1);
-      const quoi = fournisseur === 'groq' ? '⚡ Groq' : '🔷 Gemini';
       const morceaux = ia.decouper(texte);
 
       const carte = new EmbedBuilder()
         .setColor(panneaux.COULEUR)
         .setDescription(morceaux[0])
-        .setFooter({ text: `${quoi} • réponse en ${secondes} s • contenu généré par une IA` })
         .setTimestamp();
       await interaction.editReply({ embeds: [carte] }).catch(() => null);
       for (const suite of morceaux.slice(1)) {
         await interaction.followUp({
-          embeds: [new EmbedBuilder().setColor(panneaux.COULEUR).setDescription(suite).setFooter({ text: '⁘ ⁘ suite de la réponse' })],
+          embeds: [new EmbedBuilder().setColor(panneaux.COULEUR).setDescription(suite)],
         }).catch(() => null);
       }
       return { fournisseur };

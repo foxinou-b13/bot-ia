@@ -27,7 +27,7 @@ function dateLimite(seconde) {
 }
 
 async function modererAutomatiquement(message, reglages) {
-  const analyse = automod.analyser(message.content);
+  const analyse = automod.analyser(message.content, { reglages });
 
   if (analyse.action === 'supprimer') {
     try {
@@ -144,7 +144,6 @@ module.exports = {
       if (typeof message.channel.sendTyping === 'function') await message.channel.sendTyping();
     } catch { /* rien */ }
 
-    const debut = Date.now();
     try {
       let { texte, fournisseur } = await ia.demander({
         systeme: ia.consigneSysteme({
@@ -175,20 +174,17 @@ module.exports = {
       }
       texte = propre;
 
-      const secondes = ((Date.now() - debut) / 1000).toFixed(1);
-      const quoi = fournisseur === 'groq' ? '⚡ Groq' : '🔷 Gemini';
       const morceaux = ia.decouper(texte);
 
       const carte = new (require('discord.js').EmbedBuilder)()
         .setColor(panneaux.COULEUR)
         .setDescription(morceaux[0])
-        .setFooter({ text: `${quoi} • réponse en ${secondes} s • contenu généré par une IA` })
         .setTimestamp();
       await message.reply({ embeds: [carte], allowedMentions: { repliedUser: false } }).catch(() => null);
       for (const suite of morceaux.slice(1)) {
         await message.channel.send({
           embeds: [new (require('discord.js').EmbedBuilder)()
-            .setColor(panneaux.COULEUR).setDescription(suite).setFooter({ text: '⁘ ⁘ suite de la réponse' })],
+            .setColor(panneaux.COULEUR).setDescription(suite)],
         }).catch(() => null);
       }
       return { ok: true };

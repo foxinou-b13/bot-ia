@@ -34,6 +34,31 @@ function normaliser(texte) {
     .trim();
 }
 
+/** Motifs d'arnaques connues (nitro gratuit, steam gift, faux supports Discord…). */
+const LIENS_MALVEILLANTS = [
+  { regex: /\b(nitro|n1tro)\b.{0,30}\b(gratuit|free|gift|cadeau|offert|claim)\b/i, raison: 'arnaque Nitro' },
+  { regex: /\b(gratuit|free|gift|cadeau|offert|claim)\b.{0,30}\bnitro\b/i, raison: 'arnaque Nitro' },
+  { regex: /\bsteam\b.{0,25}\b(gift|cadeau|credit|crédit|argent)\b/i, raison: 'arnaque Steam' },
+  { regex: /\b(gift|cadeau)\b.{0,25}\bsteam\b/i, raison: 'arnaque Steam' },
+  { regex: /discord?app\.(com|net)\/(gift|giveaway)|dliscord|dsicord|qnitro|gift-?gg|g1ft/i, raison: 'faux lien Discord' },
+  { regex: /airdrop.{0,20}(crypto|token|wallet)|connect.{0,12}wallet|reconnect.{0,12}(your )?account/i, raison: 'arnaque crypto' },
+  { regex: /(vérifie|verifie|confirme).{0,18}(compte|account).{0,40}(nitro|banni|suspendu|interdit)/i, raison: 'fausse vérification de compte' },
+];
+
+/** Motif d'arnaque seulement s'il y a un lien ou un domaine douteux à côté. */
+function lienMalveillant(texte) {
+  const contenu = String(texte || '');
+  const aUnLien = /(?:https?:\/\/|www\.)\S+/i.test(contenu)
+    || /\b[a-z0-9-]+\.(?:tk|ml|ga|cf|gq|xyz|top|click|icu|sbs)\b/i.test(contenu)
+    // lien écrit en clair, sans http:// (fréquent dans les spams) :
+    || /\b[a-z0-9-]+(?:-[a-z0-9-]+)*\.(?:com|net|org|gg|io|fr|shop|store|site|online|live)\b/i.test(contenu);
+  if (!aUnLien) return null;
+  for (const motif of LIENS_MALVEILLANTS) {
+    if (motif.regex.test(contenu)) return motif.raison;
+  }
+  return null;
+}
+
 function contientInvitation(texte) {
   return INVITATION.test(String(texte || ''));
 }
@@ -85,20 +110,30 @@ function estSpam(horodatages, maintenant = Date.now(), reglages = {}) {
  */
 function analyser(texte, options = {}) {
   const reglages = options.reglages || {};
+  // Un module n'est actif que si le serveur l'a laissé activé (panneau /config).
+  const liensActifs = reglages.liens !== false;
+  const insultesActives = reglages.insultes !== false;
   const contenu = String(texte || '');
 
-  if (contientInvitation(contenu)) {
-    return { action: 'supprimer', raison: 'invitation Discord', details: {} };
+  if (liensActifs) {
+    if (contientInvitation(contenu)) {
+      return { action: 'supprimer', raison: 'invitation Discord', details: {} };
+    }
+    const malveillant = lienMalveillant(contenu);
+    if (malveillant) {
+      return { action: 'supprimer', raison: `lien malveillant probable (${malveillant})`, details: {} };
+    }
+    const liensMax = options.liensMax ?? 2;
+    if (compteLiens(contenu) > liensMax) {
+      return { action: 'supprimer', raison: 'trop de liens', details: { liens: compteLiens(contenu) } };
+    }
   }
 
-  const liensMax = options.liensMax ?? 2;
-  if (compteLiens(contenu) > liensMax) {
-    return { action: 'supprimer', raison: 'trop de liens', details: { liens: compteLiens(contenu) } };
-  }
-
-  const insulte = insulteTrouvee(contenu);
-  if (insulte) {
-    return { action: 'supprimer', raison: 'propos insultants', details: { mot: insulte } };
+  if (insultesActives) {
+    const insulte = insulteTrouvee(contenu);
+    if (insulte) {
+      return { action: 'supprimer', raison: 'propos insultants', details: { mot: insulte } };
+    }
   }
 
   if (reglages.majuscules && tropDeMajuscules(contenu)) {
@@ -117,6 +152,7 @@ module.exports = {
   INSULTES,
   normaliser,
   contientInvitation,
+  lienMalveillant,
   compteLiens,
   insulteTrouvee,
   tropDeMajuscules,

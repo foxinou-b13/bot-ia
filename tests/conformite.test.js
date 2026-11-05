@@ -105,7 +105,7 @@ test('/ask : question interdite → refus SANS appeler l\'IA', async () => {
   assert.strictEqual(appelee, false, 'l\'IA n\'aurait pas dû être appelée');
 });
 
-test('/ask : réponse normale → carte avec mention « généré par une IA »', async () => {
+test('/ask : réponse normale → carte propre, sans tag en dessous', async () => {
   ia.demander = async () => ({ texte: 'Le slowmode ralentit les messages.', fournisseur: 'groq' });
   const inter = interactionMock({
     commandName: 'ask', membre: membreMock({ id: `poseur-${Date.now()}` }),
@@ -118,7 +118,7 @@ test('/ask : réponse normale → carte avec mention « généré par une IA »'
   assert.ok(carte, 'la réponse doit être dans une carte');
   const json = carte.toJSON ? carte.toJSON() : carte;
   assert.strictEqual(json.description, 'Le slowmode ralentit les messages.');
-  assert.ok(/généré par une IA/.test(json.footer.text), json.footer.text);
+  assert.ok(!json.footer, 'aucun tag sous la carte');
 });
 
 // ─────────── /donnees ───────────

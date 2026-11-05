@@ -81,6 +81,31 @@ test('salon exempté correctement repéré', () => {
   assert.strictEqual(automod.salonExempt('C2', {}), false);
 });
 
+// ─── liens malveillants (arnaques connues) ───
+test('arnaque nitro avec lien → supprimé', () => {
+  const r = automod.analyser('gagne un nitro gratuit https://discord-nitro.xyz/go');
+  assert.strictEqual(r.action, 'supprimer');
+  assert.match(r.raison, /arnaque Nitro/);
+});
+test('arnaque steam gift → supprimé, même un seul lien', () => {
+  const r = automod.analyser('steam gift ici http://steam-cadeau.tk');
+  assert.strictEqual(r.action, 'supprimer');
+});
+test('faux lien discord (dliscord) → supprimé', () => {
+  assert.strictEqual(automod.analyser('clique sur dliscord-app.com/gift').action, 'supprimer');
+});
+test('nitro mentionné sans lien → rien (discussion normale)', () => {
+  assert.strictEqual(automod.analyser('j\'ai pris nitro gratuit le mois dernier sur le store officiel').action, 'aucune');
+});
+test('module liens désactivé → invitation ignorée', () => {
+  const r = automod.analyser('va sur discord.gg/x', { reglages: { liens: false } });
+  assert.strictEqual(r.action, 'aucune');
+});
+test('module insultes désactivé → insulte ignorée', () => {
+  const r = automod.analyser('ta gueule', { reglages: { insultes: false } });
+  assert.strictEqual(r.action, 'aucune');
+});
+
 module.exports = { nom: 'automod', cas };
 
 if (require.main === module) require('./executeur')(module.exports);

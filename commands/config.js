@@ -22,7 +22,7 @@ const COULEUR = 0x5865f2;
 // ─── les modules de l'auto-mod ───
 const MODULES = {
   spam: { nom: 'Spam', emoji: '🐢', aide: 'Trop de messages d\'un coup' },
-  liens: { nom: 'Liens et invitations', emoji: '🔗', aide: 'Invitations Discord et rafales de liens' },
+  liens: { nom: 'Liens et invitations', emoji: '🔗', aide: 'Invitations, arnaques nitro/steam, rafales de liens' },
   insultes: { nom: 'Insultes', emoji: '🤬', aide: 'Gros mots, même déguisés (c0nnard)' },
   majuscules: { nom: 'Majuscules', emoji: '🔠', aide: 'Messages écrits en gueulant' },
   raid: { nom: 'Raid', emoji: '🚨', aide: 'Arrivées massives soudaines' },
@@ -64,8 +64,7 @@ function panneauPrincipal(guildId, channelId = null) {
       { name: '🎭 Personnalité de l\'IA',
         value: iaR.consigne ? `> ${String(iaR.consigne).slice(0, 120)}${String(iaR.consigne).length > 120 ? '…' : ''}` : '_réponses standard (modifiable via le bouton 🎭)_',
         inline: false },
-    )
-    .setFooter({ text: 'Chaque serveur a ses propres réglages' });
+    );
 
   const menuModules = new ActionRowBuilder().addComponents(
     new StringSelectMenuBuilder()
