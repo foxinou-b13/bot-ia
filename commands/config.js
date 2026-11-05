@@ -36,7 +36,7 @@ const MODULES = {
 };
 
 /**
- * Bouton « 📱 Choisir ton image » : l'URL discord://?cmd=<id> ouvre DIRECTEMENT
+ * Bouton « 📱 Choisir une image » : l'URL discord://?cmd=<id> ouvre DIRECTEMENT
  * la commande /image-bienvenue chez l'admin (galerie sur mobile, fichiers sur PC).
  * L'ID de commande est récupéré auprès de Discord puis gardé 10 minutes en cache ;
  * en cas d'indisponibilité, on l'omet simplement — le champ URL et la commande
@@ -65,7 +65,7 @@ const RUBRIQUES = {
       },
       fond: {
         label: '🖼️ Image de fond de la carte',
-        desc: 'Le décor derrière la photo du nouveau.\n• **Rien à faire par défaut** : le bot utilise l\'image prévue pour ton serveur (prairie de cosmos).\n• **Envie d\'une autre image ?** Touche « 📱 Choisir ton image » : je t\'écris en **message privé** — là, tu fais comme d\'habitude : 📎 → galerie (téléphone) ou fichiers (PC) → tu envoies. Je vérifie, j\'enregistre, et je te renvoie l\'aperçu réel de la carte. Aucune URL à recopier.\n• « 🔗 Adresse d\'image » : si tu préfères coller un lien direct. « 🌸 Fond par défaut » : pour y revenir à tout moment.',
+        desc: 'Le décor derrière la photo du nouveau.\n• **Rien à faire par défaut** : le bot utilise l\'image prévue pour ton serveur (prairie de cosmos).\n• **Envie d\'une autre image ?** Touche « 📱 Choisir une image » : je t\'écris en **message privé** — là, tu fais comme d\'habitude : 📎 → galerie (téléphone) ou fichiers (PC) → tu envoies. Je vérifie, j\'enregistre, et je te renvoie l\'aperçu réel de la carte. Aucune URL à recopier.\n• « 🔗 Adresse d\'image » : si tu préfères coller un lien direct. « 🌸 Fond par défaut » : pour y revenir à tout moment.',
       },
       message: {
         label: '✏️ Message d\'accroche',
@@ -235,7 +235,7 @@ function carteRubrique(G, sec, channelId, note) {
 // ─── la carte PROPRE d'un réglage : description + valeur + son seul contrôle ───
 function boutonFondPersonnalisee() {
   return [
-    bouton('cfg:accueil:fond-pj', 'Choisir ton image', '📱', ButtonStyle.Primary),
+    bouton('cfg:accueil:fond-pj', 'Choisir une image', '📱', ButtonStyle.Primary),
     bouton('cfg:accueil:fond-url', 'Adresse d\'image (URL)', '🔗'),
     bouton('cfg:accueil:fond-off', 'Fond par défaut', '🌸'),
   ];
