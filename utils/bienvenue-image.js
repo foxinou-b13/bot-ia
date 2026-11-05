@@ -97,22 +97,31 @@ async function chargerImage(url, fetchImpl) {
   }
 }
 
-/** Fonds « maison » proposés dans le panneau de config (aucune image externe needed). */
-const THEMES = {
-  defaut: { nom: 'Dégradé Otaku',      couleurs: ['#1b2340', '#34406e', '#6e5aa8'] },
-  sakura: { nom: 'Sakura',             couleurs: ['#2a1626', '#7a3b5e', '#d98fae'] },
-  ocean:  { nom: 'Océan',              couleurs: ['#03202f', '#0d5873', '#4fc3d9'] },
-  nuit:   { nom: 'Nuit nippone',       couleurs: ['#0b1026', '#1f2b66', '#5a6ab5'] },
-  feu:    { nom: 'Braise',             couleurs: ['#2b0f06', '#8a2f12', '#e07a2b'] },
-};
-const NOMS_THEMES = Object.fromEntries(Object.entries(THEMES).map(([k, t]) => [k, t.nom]));
+/**
+ * Fond par défaut : l'image choisie par l'admin du serveur (livrée dans le dépôt).
+ * Une gif animée ? On utilise sa première image, nettement recadrée au format
+ * de la carte — l'aperçu reste identique sur tous les téléphones.
+ * Si le fichier venait à manquer, on retombe sur le dégradé dessiné par le bot.
+ */
+const CHEMIN_FOND_DEFAUT = path.join(__dirname, '..', 'assets', 'fond-defaut.gif');
+let tamponFondDefaut = null;
+let fondDefautTente = false;
+function chargerFondDefaut() {
+  if (!fondDefautTente) {
+    fondDefautTente = true;
+    try {
+      tamponFondDefaut = fs.readFileSync(CHEMIN_FOND_DEFAUT);
+      if (tamponFondDefaut.length < 100) tamponFondDefaut = null;
+    } catch { tamponFondDefaut = null; }
+  }
+  return tamponFondDefaut;
+}
 
-function dessinerFondParDefaut(ctx, theme = 'defaut') {
-  const t = THEMES[theme] || THEMES.defaut;
+function dessinerFondParDefaut(ctx) {
   const degrade = ctx.createLinearGradient(0, 0, LARGEUR, HAUTEUR);
-  degrade.addColorStop(0, t.couleurs[0]);
-  degrade.addColorStop(0.55, t.couleurs[1]);
-  degrade.addColorStop(1, t.couleurs[2]);
+  degrade.addColorStop(0, '#1b2340');
+  degrade.addColorStop(0.55, '#34406e');
+  degrade.addColorStop(1, '#6e5aa8');
   ctx.fillStyle = degrade;
   ctx.fillRect(0, 0, LARGEUR, HAUTEUR);
   // halos doux pour la profondeur
@@ -136,23 +145,27 @@ function ajusterTaille(ctx, texte, tailleMax, largeurMax) {
  * Compose l'image finale à partir de tampons déjà chargés.
  * @returns {Promise<Buffer>} PNG
  */
-async function composer({ fondBuffer = null, avatarBuffer = null, pseudo, langue = 'fr', theme = null }) {
+async function composer({ fondBuffer = null, avatarBuffer = null, pseudo, langue = 'fr' }) {
   chargerFont();
   const canvas = createCanvas(LARGEUR, HAUTEUR);
   const ctx = canvas.getContext('2d');
   const textes = construireTextes(langue);
 
-  // 1. fond (image de l'admin, recadrée en « cover », ou fondu maison)
+  // 1. fond (image de l'admin ; sinon le fond par défaut du serveur ; sinon dégradé)
   let fond = null;
-  if (fondBuffer) {
-    try { fond = await loadImage(fondBuffer); } catch { fond = null; }
+  const brutFond = fondBuffer || chargerFondDefaut();
+  if (brutFond) {
+    try { fond = await loadImage(brutFond); } catch {
+      if (fondBuffer) { try { fond = await loadImage(chargerFondDefaut()); } catch { fond = null; } }
+      else fond = null;
+    }
   }
   if (fond && fond.width && fond.height) {
     const ratio = Math.max(LARGEUR / fond.width, HAUTEUR / fond.height);
     const l = fond.width * ratio; const h = fond.height * ratio;
     ctx.drawImage(fond, (LARGEUR - l) / 2, (HAUTEUR - h) / 2, l, h);
   } else {
-    dessinerFondParDefaut(ctx, theme || 'defaut');
+    dessinerFondParDefaut(ctx);
   }
 
   // 2. voile léger pour que le texte reste lisible sur n'importe quel fond
@@ -208,17 +221,17 @@ async function composer({ fondBuffer = null, avatarBuffer = null, pseudo, langue
  * Fabrique la carte de bienvenue complète (télécharge le fond et l'avatar).
  * @returns {Promise<Buffer>} PNG prêt à envoyer sur Discord
  */
-async function generer({ fondUrl = null, avatarUrl = null, pseudo, langue = 'fr', theme = null, fetchImpl } = {}) {
+async function generer({ fondUrl = null, avatarUrl = null, pseudo, langue = 'fr', fetchImpl } = {}) {
   const taches = [];
   if (fondUrl) taches.push(chargerImage(optimiserUrl(fondUrl), fetchImpl).catch(() => chargerImage(fondUrl, fetchImpl).catch(() => null)));
   else taches.push(Promise.resolve(null));
   if (avatarUrl) taches.push(chargerImage(avatarUrl, fetchImpl).catch(() => null)); else taches.push(Promise.resolve(null));
   const [fondBuffer, avatarBuffer] = await Promise.all(taches);
-  return composer({ fondBuffer, avatarBuffer, pseudo, langue, theme });
+  return composer({ fondBuffer, avatarBuffer, pseudo, langue });
 }
 
 module.exports = {
   generer, composer, construireTextes, validerUrlFond, chargerImage,
-  THEMES, NOMS_THEMES, optimiserUrl,
+  optimiserUrl, chargerFondDefaut,
   LARGEUR, HAUTEUR,
 };

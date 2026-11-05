@@ -56,7 +56,7 @@ const REGLAGES_DEFAUT = {
   guide: { regles: null, support: null },
   cfgSection: null,
   cfgItem: null,
-  bienvenue: { salon: null, message: null, role: null, langue: 'fr', fond: null, fondTheme: null },
+  bienvenue: { salon: null, message: null, role: null, langue: 'fr', fond: null },
   automod: {
     spam: true,
     liens: true,

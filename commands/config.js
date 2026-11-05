@@ -81,7 +81,7 @@ const RUBRIQUES = {
       },
       fond: {
         label: '🖼️ Image de fond de la carte',
-        desc: 'Le décor derrière la photo du nouveau.\n• Un **fond « maison »** : choisis-le dans le menu ci-dessous ;\n• **TA propre image** : touche le bouton « 📱 Choisir ton image » — la galerie du téléphone s\'ouvre (sur PC : le dossier des fichiers), tu sélectionnes, tu envoies. Pas d\'URL à recopier. Quelle que soit sa taille ou sa forme, le bot la recadre tout seul au format exact de la carte (1280×720) et t\'envoie un aperçu.',
+        desc: 'Le décor derrière la photo du nouveau.\n• **Rien à faire par défaut** : le bot utilise l\'image prévue pour ton serveur (prairie de cosmos).\n• **Envie d\'une autre image** ? Touche « 📱 Choisir ton image » : la galerie du téléphone s\'ouvre (sur PC : le dossier des fichiers), tu sélectionnes, tu envoies. Quelle que soit sa taille ou sa forme, le bot la recadre tout seul au format exact de la carte (1280×720) et t\'envoie un aperçu.\n• « 🧹 Revenir au fond par défaut » remet la prairie si tu ne veux plus de ton image.',
       },
       message: {
         label: '✏️ Message d\'accroche',
@@ -192,7 +192,7 @@ function etatAccueil(G) {
     salon: b.salon ? `<#${b.salon}>` : '_non défini — accueil coupé_',
     role: b.role ? `<@&${b.role}>` : '_aucun_',
     langue: b.langue === 'en' ? 'WELCOME (anglais)' : 'BIENVENUE (français)',
-    fond: b.fond ? `🖼️ image perso : <${b.fond}>` : `🎨 thème « ${(bienvenueImage.NOMS_THEMES || {})[b.fondTheme] || 'Dégradé Otaku'} »`,
+    fond: b.fond ? `🖼️ image perso : <${b.fond}>` : '🌸 fond par défaut du serveur (cosmos)',
     message: b.message ? `\`${String(b.message).slice(0, 90)}\`` : '_le message standard du bot_',
   };
 }
@@ -256,7 +256,7 @@ function boutonFondPersonnalisee(opts = {}) {
       .setLabel('Choisir ton image').setEmoji('📱'));
   }
   rangee.push(bouton('cfg:accueil:fond-url', 'Adresse d\'image (URL)', '🔗', ButtonStyle.Secondary),
-    bouton('cfg:accueil:fond-off', 'Enlever', '🧹'));
+    bouton('cfg:accueil:fond-off', 'Fond par défaut', '🌸'));
   return rangee;
 }
 
@@ -294,14 +294,8 @@ function carteReglage(G, sec, cle, channelId, note = null, opts = {}) {
         { label: 'WELCOME (anglais)', value: 'en', default: b.langue === 'en' },
       )));
   } else if (sec === 'accueil' && cle === 'fond') {
-    embed.addFields({ name: 'Actuellement', value: b.fond ? `🖼️ image perso : <${b.fond}>` : `🎨 thème « ${(bienvenueImage.NOMS_THEMES || {})[b.fondTheme] || 'Dégradé Otaku'} »` });
-    rows.push(
-      rang(new StringSelectMenuBuilder().setCustomId('cfg:accueil:fond').setPlaceholder('🎨 Choisis un fond « maison »')
-        .addOptions(Object.entries(bienvenueImage.THEMES || { defaut: { nom: 'Dégradé Otaku' } }).map(([cle2, t]) => ({
-          label: t.nom, value: cle2, default: !b.fond && (b.fondTheme || 'defaut') === cle2,
-        })))),
-      rang(...boutonFondPersonnalisee(opts)),
-    );
+    embed.addFields({ name: 'Actuellement', value: b.fond ? `🖼️ image perso : <${b.fond}>` : '🌸 fond par défaut du serveur (cosmos)' });
+    rows.push(rang(...boutonFondPersonnalisee(opts)));
   } else if (sec === 'accueil' && cle === 'message') {
     embed.addFields({ name: 'Actuellement', value: b.message ? `\`${String(b.message).slice(0, 90)}\`` : '_le message standard_\n> ' + MESSAGE_DEFAUT.slice(0, 90) });
     rows.push(rang(bouton('cfg:accueil:msg', 'Écrire le message', '✏️', ButtonStyle.Primary),
@@ -456,13 +450,8 @@ module.exports = {
       return maj({ bienvenue: { langue } },
         langue === 'en' ? '🌍 La carte affichera « WELCOME ».' : '🌍 La carte affichera « BIENVENUE ».');
     }
-    if (id === 'cfg:accueil:fond' && interaction.isStringSelectMenu()) {
-      const v = interaction.values[0];
-      return maj({ bienvenue: { fondTheme: v === 'defaut' ? null : v, fond: null } },
-        v === 'defaut' ? '🎨 Fond : dégradé Otaku.' : `🎨 Fond : « ${(bienvenueImage.NOMS_THEMES || {})[v] || v} ».`);
-    }
     if (id === 'cfg:accueil:fond-off') {
-      return maj({ bienvenue: { fond: null } }, '🧹 Image perso retirée — le thème choisi reprend la main.');
+      return maj({ bienvenue: { fond: null, fondTheme: null } }, '🌸 Retour au fond par défaut du serveur.');
     }
     if (id === 'cfg:accueil:fond-url') {
       return ouvrirFondModal(interaction);

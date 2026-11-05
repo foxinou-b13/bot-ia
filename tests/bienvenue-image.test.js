@@ -49,13 +49,14 @@ test('composition : avatar illisible → initiale dessinée, pas de crash', asyn
   assert.ok(png[0] === 0x89);
 });
 
-test('generer() : fond injoignable → dégradé maison, aucune exception', async () => {
+test('generer() : fond perso injoignable → le fond par défaut prend le relais, aucune exception', async () => {
   const png = await img.generer({
     fondUrl: 'https://exemple-inexistant-otaku.invalid/x.png',
     pseudo: 'Fox', langue: 'fr',
     fetchImpl: async () => { throw new Error('réseau KO'); },
   });
   assert.ok(png[0] === 0x89);
+  assert.strictEqual(png.readUInt32BE(16), 1280);
 });
 
 // ─── réglages dans /config ───
@@ -109,29 +110,30 @@ test('la carte rubrique accueil annonce la langue et le fond choisis', () => {
   assert.ok(/image perso/.test(fond.value), fond && fond.value);
 });
 
-test('le menu des fonds propose les thèmes maison', () => {
+test('la carte du fond n\'affiche plus de menu thèmes (supprimés sur demande)', () => {
+  stockage.majReglages('G-BI', { bienvenue: { fond: null } });
   const carte = config.carteReglage('G-BI', 'accueil', 'fond', 'C1', null);
-  const menu = carte.components[0].toJSON().components[0];
-  assert.strictEqual(menu.custom_id, 'cfg:accueil:fond');
-  const valeurs = menu.options.map((o) => o.value);
-  for (const v of ['defaut', 'sakura', 'ocean', 'nuit', 'feu']) assert.ok(valeurs.includes(v), `${v} absent`);
+  const json = carte.components.map((r) => r.toJSON());
+  assert.ok(!json.some((r) => r.components.some((c) => c.custom_id === 'cfg:accueil:fond')),
+    'le sélecteur de thèmes ne doit plus exister');
+  assert.ok(/fond par défaut/.test(carte.embeds[0].toJSON().fields[0].value));
 });
 
-test('choisir un thème de fond l\'enregistre et nettoie l\'URL perso', async () => {
-  stockage.majReglages('G-BI', { bienvenue: { fond: 'https://x/y.png', fondTheme: null } });
-  const inter = selecteur('cfg:accueil:fond', { isStringSelectMenu: () => true, values: ['sakura'] });
+test('« 🌸 Fond par défaut » : nettoie l\'image perso enregistrée', async () => {
+  stockage.majReglages('G-BI', { bienvenue: { fond: 'https://x/y.png' } });
+  const inter = selecteur('cfg:accueil:fond-off', { isButton: () => true });
   await config.composant(inter);
-  const b = stockage.reglages('G-BI').bienvenue;
-  assert.strictEqual(b.fondTheme, 'sakura');
-  assert.strictEqual(b.fond, null);
+  assert.strictEqual(stockage.reglages('G-BI').bienvenue.fond, null);
 });
 
-test('thème de fond : rendu différent du dégradé par défaut', async () => {
-  const img2 = require('../utils/bienvenue-image');
-  const a = await img2.composer({ pseudo: 'A', theme: 'defaut' });
-  const b2 = await img2.composer({ pseudo: 'A', theme: 'sakura' });
-  assert.ok(a[0] === 0x89 && b2[0] === 0x89);
-  assert.ok(!a.equals(b2), 'le thème ne change rien au rendu');
+test('fond par défaut : la gif cosmos du serveur est utilisée et recadrée pile 1280×720', async () => {
+  const fs = require('fs');
+  const brut = fs.readFileSync(require('path').join(__dirname, '..', 'assets', 'fond-defaut.gif'));
+  assert.ok(brut.length > 1000, "l'asset du fond par défaut est manquante");
+  const png = await img.composer({ pseudo: 'A' });
+  assert.strictEqual(png[0], 0x89, 'le rendu doit être un PNG');
+  assert.strictEqual(png.readUInt32BE(16), 1280);
+  assert.strictEqual(png.readUInt32BE(20), 720);
 });
 
 // ─── optimisation CDN + recadrage automatique ───
@@ -235,7 +237,7 @@ test('toutes les commandes sont chargées, y compris la nouvelle', () => {
 // ─── bouton « 📱 Choisir ton image » (ouvre la commande → galerie/PC) ───
 test('carte du fond : le bouton lien ouvre la commande quand son ID est connu', () => {
   const carte = config.carteReglage('G-BI', 'accueil', 'fond', 'C1', null, { urlChoix: 'discord://?cmd=42' });
-  const boutons = carte.components[1].toJSON().components;
+  const boutons = carte.components[0].toJSON().components;
   const lien = boutons.find((b) => b.style === 5);
   assert.ok(lien, 'bouton lien absent');
   assert.strictEqual(lien.url, 'discord://?cmd=42');
@@ -244,7 +246,7 @@ test('carte du fond : le bouton lien ouvre la commande quand son ID est connu', 
 
 test('carte du fond : sans ID de commande, pas de bouton lien (repli propre)', () => {
   const carte = config.carteReglage('G-BI', 'accueil', 'fond', 'C1', null, {});
-  const boutons = carte.components[1].toJSON().components;
+  const boutons = carte.components[0].toJSON().components;
   assert.ok(!boutons.some((b) => b.style === 5), 'bouton lien inventé');
   assert.ok(boutons.some((b) => b.custom_id === 'cfg:accueil:fond-url'), 'le repli URL doit rester');
 });
