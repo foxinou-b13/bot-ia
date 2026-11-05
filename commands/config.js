@@ -84,7 +84,9 @@ function panneauPrincipal(guildId, channelId = null, section = null, note = null
       { name: '🗂️ Logs du staff', value: r.logs ? `<#${r.logs}>` : '_non définis_', inline: true },
       { name: '📜 Salon des règles', value: r.guide.regles ? `<#${r.guide.regles}>` : '_non défini_', inline: true },
       { name: '🛟 Contacter le staff', value: r.guide.support ? `<#${r.guide.support}>` : '_non défini_', inline: true },
-      { name: '👋 Bienvenue', value: b.salon ? `<#${b.salon}>` + (b.role ? ` · rôle <@&${b.role}>` : '') : '_coupée_', inline: true },
+      { name: '👋 Bienvenue', value: b.salon
+        ? `<#${b.salon}>` + (b.role ? ` · rôle <@&${b.role}>` : '') + ` · ${b.langue === 'en' ? 'WELCOME (en)' : 'BIENVENUE (fr)'}` + (b.fond ? ' · 🖼️ fond perso' : '')
+        : '_coupée_', inline: false },
       { name: '⚖️ Sanction auto', value: a.sanctionAuto ? `${a.seuilAvert || 3} avertis → mute ${a.dureeSanction || 60} min` : '_désactivée_', inline: true },
       { name: '🤖 IA', value: iaR.active === false ? '_coupée partout_' : (iaCoupeeIci ? '🔇 coupée dans ce salon' : '🟢 active'), inline: true },
       { name: '🎭 Personnalité', value: iaR.consigne ? `> ${String(iaR.consigne).slice(0, 90)}` : '_standard_', inline: false },
@@ -219,6 +221,34 @@ module.exports = {
     }
     if (id === 'cfg:accueil:role-off') {
       return maj({ bienvenue: { role: null } }, '🧹 Rôle automatique retiré.');
+    }
+    if (id === 'cfg:accueil:langue' && interaction.isStringSelectMenu()) {
+      const langue = interaction.values[0] === 'en' ? 'en' : 'fr';
+      return maj({ bienvenue: { langue } },
+        langue === 'en' ? '🌍 La carte affichera « WELCOME ».' : '🌍 La carte affichera « BIENVENUE ».');
+    }
+    if (id === 'cfg:accueil:fond') {
+      const actuelle = (stockage.reglages(G).bienvenue || {}).fond || '';
+      const modal = new ModalBuilder().setCustomId('cfg:accueil:fond-modal').setTitle('🖼️ Image de fond de la carte');
+      const champ = new TextInputBuilder()
+        .setCustomId('url')
+        .setLabel('Adresse de l\'image (https://…)')
+        .setPlaceholder('Colle une URL d\'image · vide = fondu dégradé du bot')
+        .setStyle(TextInputStyle.Short).setMaxLength(500).setRequired(false)
+        .setValue(actuelle.slice(0, 500));
+      modal.addComponents(new ActionRowBuilder().addComponents(champ));
+      await interaction.showModal(modal).catch(() => null);
+      return true;
+    }
+    if (id === 'cfg:accueil:fond-modal') {
+      const brut = String(interaction.fields?.getTextInputValue('url') || '').trim();
+      const verdict = require('../utils/bienvenue-image').validerUrlFond(brut);
+      if (!verdict.ok) {
+        return maj({ bienvenue: { fond: null } },
+          '⚠️ Cette adresse n\'est pas une image en http(s) — fond dégradé du bot rétabli.');
+      }
+      return maj({ bienvenue: { fond: verdict.valeur } },
+        verdict.valeur ? '🖼️ Fond enregistré : les cartes utiliseront cette image.' : '🖼️ Fond retiré — le bot utilisera son dégradé maison.');
     }
     if (id === 'cfg:accueil:off') {
       return maj({ bienvenue: { salon: null } }, '🔕 Accueil coupé — plus de message de bienvenue.');

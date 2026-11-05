@@ -130,15 +130,34 @@ test('bienvenue : message envoyé avec les variables remplacées', async () => {
   membre.guild = guilde;
   await guildMemberAdd.executer(client, membre);
 
+  // Comportement actuel : la CARTE-IMAGE prime (PNG joint + mention ping).
   const paquet = salon.messagesEnvoyes[0] || {};
-  const carte = paquet.embeds?.[0];
-  assert.ok(carte, 'la bienvenue doit être dans une carte (embed)');
-  const json = carte.toJSON ? carte.toJSON() : carte;
-  const texte = `${json.title || ''} ${json.description || ''}`;
-  assert.ok(texte.includes('<@nouveau1>'), texte);
-  assert.ok(texte.includes('Otaku Land'), texte);
-  assert.ok(texte.includes('42'), texte);
-  assert.ok(!json.footer, 'aucun tag sous la carte');
+  assert.ok(paquet.files?.length, 'aucune image de bienvenue envoyée');
+  assert.ok(String(paquet.content).includes('<@nouveau1>'), 'le nouveau doit être pingué sur l\'image');
+  const binaire = paquet.files[0].attachment;
+  assert.ok(Buffer.isBuffer(binaire) && binaire[0] === 0x89, 'le fichier doit être un PNG');
+});
+
+test('bienvenue : si l\'image ne peut pas être générée → carte texte en repli', async () => {
+  const bienvenueImage = require('../utils/bienvenue-image');
+  const original = bienvenueImage.generer;
+  bienvenueImage.generer = async () => { throw new Error('canvas indisponible'); };
+  try {
+    const guilde = guildeMock({ id: 'G-BIENV2', nom: 'Otaku Land' });
+    const salon = salonMock({ id: 'S-BIENV2' });
+    guilde.salonsDeTest.set('S-BIENV2', salon);
+    stockage.majReglages('G-BIENV2', { bienvenue: { salon: 'S-BIENV2', message: 'Bienvenue {membre} sur {serveur} !' } });
+    const membre = membreMock({ id: 'nouveau9' });
+    membre.guild = guilde;
+    await guildMemberAdd.executer(client, membre);
+    const paquet = salon.messagesEnvoyes[0] || {};
+    assert.ok(paquet.embeds?.length, 'la carte texte de repli doit partir');
+    const json = paquet.embeds[0].toJSON();
+    assert.ok(json.title.includes('Otaku Land'));
+    assert.ok(!json.footer, 'aucun tag sous la carte');
+  } finally {
+    bienvenueImage.generer = original;
+  }
 });
 
 test('bienvenue désactivée : aucun message', async () => {

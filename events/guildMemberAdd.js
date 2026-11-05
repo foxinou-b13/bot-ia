@@ -3,6 +3,7 @@
  */
 const { Events, EmbedBuilder } = require('discord.js');
 const stockage = require('../utils/stockage');
+const bienvenueImage = require('../utils/bienvenue-image');
 const journal = require('../utils/journal');
 const { config } = require('../config');
 
@@ -61,6 +62,29 @@ module.exports = {
     if (!cible || typeof cible.send !== 'function') return roleDonne || null;
 
     const nombre = guild.memberCount || 0;
+
+    // ─── 1ᵉʳ choix : la grande carte-image (fond de l'admin + avatar + ping) ───
+    try {
+      const png = await bienvenueImage.generer({
+        fondUrl: reglages.bienvenue.fond || null,
+        avatarUrl: typeof membre.user?.displayAvatarURL === 'function'
+          ? membre.user.displayAvatarURL({ extension: 'png', size: 256 })
+          : null,
+        pseudo: membre.user?.username || 'nouveau membre',
+        langue: reglages.bienvenue.langue || 'fr',
+        serveur: guild.name,
+      });
+      await cible.send({
+        content: `<@${membre.id}>`,
+        files: [{ name: 'bienvenue.png', attachment: png }],
+        allowedMentions: { users: [membre.id] },
+      });
+      return true;
+    } catch (erreur) {
+      console.error('⚠️ Carte-image de bienvenue impossible, je bascule sur la carte texte :', erreur.message);
+    }
+
+    // ─── repli : la carte texte propre ───
     const texte = texteBienvenue(message || 'Bienvenue {membre} sur **{serveur}** !', membre, guild, nombre);
 
     const carte = new EmbedBuilder()
