@@ -61,33 +61,68 @@ test('première ouverture : PAS les réglages d\'accueil, juste le menu', () => 
   assert.ok(/Choisis/.test(paquet.embeds[0].toJSON().description), 'le texte doit inviter à choisir');
 });
 
-test('après choix d\'une section, les réglages suivent puis se mémorisent', async () => {
+test('la rubrique choisie se mémorise : la rouvrir retombe dessus', async () => {
   const G3 = `G-CFG-GARDE-${Date.now()}`;
   const s1 = menuFactice({ customId: 'cfg:section', values: ['salons'], guildId: G3 });
   await config.composant(s1);
-  const rendu = s1.journal.find(([t]) => t === 'update')[1];
-  const ids = rendu.components.map((r) => r.toJSON().components[0].custom_id);
-  assert.ok(ids.includes('cfg:salons:regles'), 'les réglages de la section doivent suivre le choix');
   const rendu2 = config.panneauPrincipal(G3);
-  assert.ok(rendu2.components.length > 1, 'la section mémorisée doit réafficher ses réglages');
+  assert.ok(rendu2.components.length > 1, 'la rubrique mémorisée doit réafficher sa carte');
+  const ids = rendu2.components.map((r) => r.toJSON().components[0].custom_id);
+  assert.deepStrictEqual(ids, ['cfg:item', 'cfg:racine']);
 });
 
-test('changer de section : le panneau affiche les bons réglages et se souvient', async () => {
+test('rubrique choisie : SA carte, avec un menu qui liste ses réglages (et rien d\'autre)', async () => {
   const inter = menuFactice({ customId: 'cfg:section', values: ['salons'] });
   await config.composant(inter);
   assert.strictEqual(stockage.reglages(G).cfgSection, 'salons');
   const update = inter.journal.find(([type]) => type === 'update');
   assert.ok(update, 'panneau non rafraîchi');
-  const ids = update[1].components.map((r) => r.toJSON().components[0].custom_id);
-  assert.ok(ids.includes('cfg:salons:logs'), 'le sélecteur de salon des logs doit apparaître');
-  assert.ok(ids.includes('cfg:salons:regles'), 'le sélecteur des règles doit apparaître');
-  assert.ok(ids.includes('cfg:salons:support'), 'le sélecteur support doit apparaître');
+  const json = update[1].components.map((r) => r.toJSON());
+  assert.deepStrictEqual(json.map((c) => c.components[0].custom_id), ['cfg:item', 'cfg:racine'],
+    'la carte rubrique = menu des réglages + bouton changer de rubrique, rien de mélangé');
+  const opts = json[0].components[0].options.map((o) => o.value);
+  assert.deepStrictEqual(opts, ['salons:logs', 'salons:regles', 'salons:support']);
 });
 
-test('section accueil : sélecteurs salon + rôle + boutons message', () => {
-  const paquet = config.panneauPrincipal(G, 'C1', 'accueil');
-  const ids = paquet.components.map((r) => r.toJSON().components[0].custom_id);
-  assert.deepStrictEqual(ids.slice(1), ['cfg:accueil:salon', 'cfg:accueil:role', 'cfg:accueil:msg']);
+test('réglage choisi : sa carte propre avec SON seul contrôle + retour', async () => {
+  stockage.majReglages(G, { cfgSection: 'accueil', cfgItem: null });
+  const nav = menuFactice({ customId: 'cfg:item', values: ['accueil:salon'] });
+  await config.composant(nav);
+  const json = nav.journal.find(([t]) => t === 'update')[1].components.map((r) => r.toJSON());
+  assert.deepStrictEqual(json.map((c) => c.components[0].custom_id), ['cfg:accueil:salon', 'cfg:retour'],
+    'aucun autre réglage ne doit traîner sur la carte du salon');
+  const desc = nav.journal.find(([t]) => t === 'update')[1].embeds[0].toJSON().description;
+  assert.ok(/Le salon où Otaku envoie la carte/.test(desc), 'la carte doit expliquer à quoi sert le réglage');
+});
+
+test('bouton retour : on revient à la carte de la rubrique', async () => {
+  stockage.majReglages(G, { cfgSection: 'accueil', cfgItem: 'salon' });
+  const inter = menuFactice({ customId: 'cfg:retour', kind: 'button' });
+  await config.composant(inter);
+  assert.strictEqual(stockage.reglages(G).cfgItem, null);
+  const json = inter.journal.find(([t]) => t === 'update')[1].components.map((r) => r.toJSON());
+  assert.deepStrictEqual(json.map((c) => c.components[0].custom_id), ['cfg:item', 'cfg:racine']);
+});
+
+test('chaque rubrique a sa carte et chaque réglage sa description', () => {
+  for (const [sec, rub] of Object.entries(config.RUBRIQUES)) {
+    const carte = config.carteRubrique(G, sec, 'C1', null);
+    const embed = carte.embeds[0].toJSON();
+    assert.ok(embed.title.includes(rub.label.replace(/^[^ ]+ /, '')), `${sec} : titre de rubrique manquant`);
+    for (const cle of Object.keys(rub.items)) {
+      const c2 = config.carteReglage(G, sec, cle, 'C1', null);
+      assert.ok(c2.embeds[0].toJSON().description.length > 30, `${sec}:${cle} : pas de description`);
+      const ids = c2.components.map((r) => r.toJSON().components[0].custom_id);
+      assert.ok(ids.includes('cfg:retour'), `${sec}:${cle} : bouton retour manquant`);
+    }
+  }
+});
+
+test('accueil : le menu de la carte contient bien les 6 réglages', () => {
+  const carte = config.carteRubrique(G, 'accueil', 'C1', null);
+  const menu = carte.components[0].toJSON().components[0];
+  assert.deepStrictEqual(menu.options.map((o) => o.value),
+    ['accueil:salon', 'accueil:role', 'accueil:langue', 'accueil:fond', 'accueil:message', 'accueil:couper']);
 });
 
 test('/config : refusé sans la permission Gérer le serveur', async () => {
@@ -97,8 +132,9 @@ test('/config : refusé sans la permission Gérer le serveur', async () => {
 });
 
 test('/config : le menu des modules contient les 6 réglages', async () => {
-  const panneau = config.panneauPrincipal(G, null, 'automod');
-  const menu = panneau.components[1].toJSON().components[0];
+  const carte = config.carteReglage(G, 'automod', 'modules', null, null);
+  const menu = carte.components[0].toJSON().components[0];
+  assert.strictEqual(menu.custom_id, 'cfg:modules');
   assert.strictEqual(menu.options.length, 6, `${menu.options.length} options`);
   for (const valeur of ['spam', 'liens', 'insultes', 'majuscules', 'raid', 'sanctionAuto']) {
     assert.ok(menu.options.some((o) => o.value === valeur), `${valeur} manquant`);

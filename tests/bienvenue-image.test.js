@@ -78,8 +78,8 @@ test('panneau accueil : menu langue enregistré', async () => {
   assert.strictEqual(stockage.reglages('G-BI').bienvenue.langue, 'en');
 });
 
-test('panneau accueil : le bouton fond ouvre un formulaire, l\'URL est validée', async () => {
-  const interBouton = selecteur('cfg:accueil:fond', { isButton: () => true, async showModal(m) { this.modalVu = m; } });
+test('panneau accueil : le bouton « image perso » ouvre un formulaire, l\'URL est validée', async () => {
+  const interBouton = selecteur('cfg:accueil:fond-url', { isButton: () => true, async showModal(m) { this.modalVu = m; } });
   await config.composant(interBouton);
   assert.ok(interBouton.modalVu, 'le formulaire ne s\'ouvre pas');
 
@@ -99,12 +99,39 @@ test('panneau accueil : le bouton fond ouvre un formulaire, l\'URL est validée'
   assert.strictEqual(stockage.reglages('G-BI').bienvenue.fond, null);
 });
 
-test('l\'écran accueil annonce la langue et le fond choisis', () => {
+test('la carte rubrique accueil annonce la langue et le fond choisis', () => {
   stockage.majReglages('G-BI', { bienvenue: { salon: 'S1', langue: 'en', fond: 'https://x/y.png' } });
   const paquet = config.panneauPrincipal('G-BI', null, 'accueil');
-  const champ = paquet.embeds[0].toJSON().fields.find((f) => /Bienvenue/.test(f.name));
-  assert.ok(/WELCOME \(en\)/.test(champ.value), champ.value);
-  assert.ok(/fond perso/.test(champ.value), champ.value);
+  const champs = paquet.embeds[0].toJSON().fields;
+  const langue = champs.find((f) => /Langue/.test(f.name));
+  const fond = champs.find((f) => /Fond/.test(f.name));
+  assert.ok(/WELCOME/.test(langue.value), langue && langue.value);
+  assert.ok(/image perso/.test(fond.value), fond && fond.value);
+});
+
+test('le menu des fonds propose les thèmes maison', () => {
+  const carte = config.carteReglage('G-BI', 'accueil', 'fond', 'C1', null);
+  const menu = carte.components[0].toJSON().components[0];
+  assert.strictEqual(menu.custom_id, 'cfg:accueil:fond');
+  const valeurs = menu.options.map((o) => o.value);
+  for (const v of ['defaut', 'sakura', 'ocean', 'nuit', 'feu']) assert.ok(valeurs.includes(v), `${v} absent`);
+});
+
+test('choisir un thème de fond l\'enregistre et nettoie l\'URL perso', async () => {
+  stockage.majReglages('G-BI', { bienvenue: { fond: 'https://x/y.png', fondTheme: null } });
+  const inter = selecteur('cfg:accueil:fond', { isStringSelectMenu: () => true, values: ['sakura'] });
+  await config.composant(inter);
+  const b = stockage.reglages('G-BI').bienvenue;
+  assert.strictEqual(b.fondTheme, 'sakura');
+  assert.strictEqual(b.fond, null);
+});
+
+test('thème de fond : rendu différent du dégradé par défaut', async () => {
+  const img2 = require('../utils/bienvenue-image');
+  const a = await img2.composer({ pseudo: 'A', theme: 'defaut' });
+  const b2 = await img2.composer({ pseudo: 'A', theme: 'sakura' });
+  assert.ok(a[0] === 0x89 && b2[0] === 0x89);
+  assert.ok(!a.equals(b2), 'le thème ne change rien au rendu');
 });
 
 module.exports = { nom: 'bienvenue-image', cas };

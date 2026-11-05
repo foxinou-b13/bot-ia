@@ -1,8 +1,14 @@
 /**
- * commands/config.js — LE panneau de configuration, un seul écran propre.
+ * commands/config.js — le panneau de configuration, en « cartes indépendantes ».
  *
- *   /config → un menu « Que veux-tu configurer ? » (5 sections) ;
- *   chaque section affiche uniquement ses sélecteurs. Zéro saisie dans le chat.
+ *   /config → carte 1 : le sélecteur de RUBRIQUES, rien d'autre ;
+ *   rubrique choisie → sa carte : ce qu'elle fait + ses réglages en menu ;
+ *   réglage choisi → SA carte : description, valeur actuelle, et le contrôle
+ *   (menu / sélecteur / bouton) uniquement pour ce réglage.
+ *   Bouton « ← Retour » partout. Zéro saisie dans le chat, zéro mélange.
+ *
+ * Chaque réglage s'applique instantanément (les commandes lisent stockage.reglages
+ * à chaque fois) ; la persistance.mongo les sauvegarde en arrière-plan.
  */
 const {
   SlashCommandBuilder, PermissionsBitField, ActionRowBuilder,
@@ -14,6 +20,7 @@ const perms = require('../utils/permissions');
 const panneaux = require('../utils/panneaux');
 const stockage = require('../utils/stockage');
 const ia = require('../utils/ia');
+const bienvenueImage = require('../utils/bienvenue-image');
 
 const COULEUR = 0x5865f2;
 const MESSAGE_DEFAUT = 'Bienvenue {membre} sur **{serveur}** ! Tu es notre {nombre}e membre.';
@@ -28,142 +35,310 @@ const MODULES = {
   sanctionAuto: { nom: 'Sanction automatique', emoji: '⚖️', aide: 'Mute auto après plusieurs avertissements' },
 };
 
-const SECTIONS = [
-  { valeur: 'accueil', label: '👋 Accueil des nouveaux', aide: 'Salon de bienvenue, message, rôle automatique' },
-  { valeur: 'salons', label: '📋 Salons & repères', aide: 'Logs du staff, règles, salon pour contacter le staff' },
-  { valeur: 'automod', label: '🛡️ Auto-modération', aide: 'Spam, liens, insultes, majuscules, raid' },
-  { valeur: 'sanctions', label: '⚖️ Sanctions automatiques', aide: 'Mute après plusieurs avertissements' },
-  { valeur: 'ia', label: '🤖 Intelligence artificielle', aide: 'Activer/couper par salon, personnalité' },
-];
+// ─── les rubriques, et dans chaque rubrique : un réglage = une carte ───
+const RUBRIQUES = {
+  accueil: {
+    label: '👋 Accueil des nouveaux',
+    aide: 'Carte de bienvenue, message, rôle automatique',
+    intro: 'Quand un membre arrive, Otaku envoie la **carte-image de bienvenue** (sa photo + BIENVENUE) et le mentionne. Choisis un réglage ci-dessous — chacun a sa carte.',
+    items: {
+      salon: {
+        label: '📋 Salon de bienvenue',
+        desc: 'Le salon où Otaku envoie la carte quand un nouveau arrive. Choisis-le dans le menu.\n*Pour arrêter l\'accueil : l\'option « 🔕 Couper l\'accueil ».*',
+      },
+      role: {
+        label: '🎭 Rôle automatique',
+        desc: 'Le rôle donné tout seul aux nouveaux membres (ex. « Membre » pour ouvrir les salons). Optionnel.\n⚠️ Le rôle doit être **en dessous** du rôle d\'Otaku dans la liste des rôles du serveur, sinon Discord refuse de le donner.',
+      },
+      langue: {
+        label: '🌍 Langue de la carte',
+        desc: 'Le grand mot écrit sur la carte-image de bienvenue. Français ou anglais — le pseudo du nouveau est toujours affiché dessous.',
+      },
+      fond: {
+        label: '🖼️ Image de fond de la carte',
+        desc: 'Le décor derrière la photo du nouveau.\n• Choisis un **theme maison** dans le menu ;\n• ou « 🖼️ Image perso » pour utiliser TA image (une adresse http/https, sans texte dessus de préférence).\nUne adresse personnalisée remplace le thème ; vide = thème dégradé Otaku.',
+      },
+      message: {
+        label: '✏️ Message d\'accroche',
+        desc: 'Un petit texte écrit par-dessus la carte, si tu veux ajouter quelque chose (facultatif).\nLes mots-clés sont remplacés tout seuls : `{membre}` = la mention du nouveau, `{serveur}` = le nom du serveur, `{nombre}` = son rang d\'arrivée.',
+      },
+      couper: {
+        label: '🔕 Couper l\'accueil',
+        desc: 'Désactive complètement la bienvenue : plus aucune carte ni mention quand un membre arrive. Les autres réglages sont gardés, tu pourras tout rallumer en rechoisissant un salon.',
+      },
+    },
+  },
+  salons: {
+    label: '📋 Salons & repères',
+    aide: 'Logs du staff, règles, contacter le staff',
+    intro: 'Les salons que Otaku utilise pour s\'occuper du serveur (journaux du staff, règles, aide). Un réglage = une carte.',
+    items: {
+      logs: {
+        label: '🗂️ Journal du staff',
+        desc: 'Salon PRIVÉ où Otaku note tout ce qui compte : sanctions, alertes auto-mod, suppressions de messages. Choisis un salon que seuls tes modérateurs voient.',
+      },
+      regles: {
+        label: '📜 Salon des règles',
+        desc: 'Quand un membre demande les règles (commande /guide), Otaku l\'oriente vers ce salon.',
+      },
+      support: {
+        label: '🛟 Contacter le staff',
+        desc: 'Quand un membre demande de l\'aide (commande /aide), Otaku l\'oriente vers ce salon où le staff le verra.',
+      },
+    },
+  },
+  automod: {
+    label: '🛡️ Auto-modération',
+    aide: 'Spam, liens, insultes, majuscules, raid',
+    intro: 'Otaku filtre tout seul les comportements problématiques. Active ou non chaque module — la liste est sur sa carte.',
+    items: {
+      modules: {
+        label: '🧰 Modules de filtrage',
+        desc: 'Menu à coches : laisse cochés les modules que tu veux ACTIFS, décoche ceux que tu veux couper. Le changement est immédiat.',
+      },
+      exempt: {
+        label: '🤫 Salon exempté',
+        desc: 'Un salon où l\'auto-mod ne filtre JAMAIS rien (ex. « spam-contrôlé », poste de liens autorisés). Les autres salons restent protégés.',
+      },
+    },
+  },
+  sanctions: {
+    label: '⚖️ Sanctions automatiques',
+    aide: 'Mute automatique après des avertissements',
+    intro: 'Après plusieurs avertissements (/warn), Otaku peut mettre l\'auteur en sourdine tout seul. Choisis la formule sur la carte.',
+    items: {
+      formule: {
+        label: '⚙️ Formule de la sanction',
+        desc: 'Combien d\'avertissements avant la sourdine, et pour combien de temps. « Désactiver » laisse les /warn seuls, sans mute automatique.',
+      },
+    },
+  },
+  ia: {
+    label: '🤖 Intelligence artificielle',
+    aide: 'Activer/couper par salon, personnalité',
+    intro: 'Le mode discussion IA (commande /ask). Tu peux la couper dans certains salons et changer sa personnalité.',
+    items: {
+      ici: {
+        label: '🔇 IA dans ce salon',
+        desc: 'Coupe ou réactive l\'IA pour LE salon où tu te trouves en ce moment (celui où tu as tapé /config). Pratique pour les salons sérieux.',
+      },
+      personnalite: {
+        label: '🎭 Personnalité de l\'IA',
+        desc: 'Comment l\'IA doit se tenir : ton, longueur des réponses, spécialité… Exemple : « réponds en 2 phrases, ton pirate, parle japonais quand on te demande ». Vide = personnalité standard.',
+      },
+      memo: {
+        label: '🧠 Oublier la conversation',
+        desc: 'Efface la mémoire de l\'IA pour CE salon : elle repart de zéro (utile après une conversation partie en vrille).',
+      },
+    },
+  },
+};
 
-function sectionCourante(guildId) {
-  const s = stockage.reglages(guildId).cfgSection;
-  // null tant que rien n'est choisi : le panneau n'affiche ALORS que le sélecteur.
-  return SECTIONS.some((x) => x.valeur === s) ? s : null;
-}
+const SECTIONS = Object.entries(RUBRIQUES).map(([valeur, r]) => ({ valeur, label: r.label, aide: r.aide }));
 
 const rang = (...composants) => new ActionRowBuilder().addComponents(...composants);
-const selectSection = (active) => rang(
-  new StringSelectMenuBuilder()
-    .setCustomId('cfg:section')
-    .setPlaceholder('⚙️ Que veux-tu configurer ?')
-    .addOptions(SECTIONS.map((s) => ({
-      label: s.label, value: s.valeur, description: s.aide.slice(0, 95), default: s.valeur === active,
-    }))),
-);
-const selectCanal = (id, place) => rang(
-  new ChannelSelectMenuBuilder().setCustomId(id).setPlaceholder(place)
-    .addChannelTypes(ChannelType.GuildText, ChannelType.GuildAnnouncement),
-);
 const bouton = (id, libelle, emoji, style = ButtonStyle.Secondary) =>
   new ButtonBuilder().setCustomId(id).setLabel(libelle).setEmoji(emoji).setStyle(style);
 
-// ─── l'écran complet ───
-function panneauPrincipal(guildId, channelId = null, section = null, note = null) {
-  const r = stockage.reglages(guildId);
-  const a = r.automod;
-  const sec = section || sectionCourante(guildId);
-  const b = r.bienvenue || {};
-  const iaR = r.ia || {};
-  const iaCoupeeIci = Boolean(channelId && (iaR.salonBloques || []).includes(channelId));
+const boutonRetour = () => rang(bouton('cfg:retour', '← Retour à la rubrique', '↩️'));
 
-  const actifs = Object.entries(MODULES).filter(([cle]) => a[cle]).map(([, m]) => m.nom);
-  const lignes = [];
-  if (note) lignes.push(note, '');
-  lignes.push(sec
-    ? 'Tu es dans la section **'+SECTIONS.find((x) => x.valeur === sec).label+'** — change de section avec le menu du haut, chaque réglage s\'applique instantanément.'
-    : '👇 Choisis d\'abord **ce que tu veux configurer** dans le menu — ses réglages s\'afficheront juste en dessous.');
-
+// ─── carte 1 : les rubriques, rien d'autre ───
+function ecranRacine(note = null) {
   const embed = new EmbedBuilder()
     .setColor(COULEUR)
     .setTitle('⚙️ Configuration d\'Otaku')
-    .setDescription(lignes.join('\n'))
-    .addFields(
-      { name: '🛡️ Auto-mod', value: actifs.length ? actifs.join(' · ') : '_tout est coupé_', inline: true },
-      { name: '📋 Salon exempté', value: a.salonExempt ? `<#${a.salonExempt}>` : '_aucun_', inline: true },
-      { name: '🗂️ Logs du staff', value: r.logs ? `<#${r.logs}>` : '_non définis_', inline: true },
+    .setDescription([
+      note,
+      note ? '' : null,
+      'Choisis une **rubrique** dans le menu : tu verras ensuite ses réglages, **un par un, chacun sur sa carte** avec son explication.',
+      'Tout se fait par menus — rien à taper dans le chat. Chaque changement est enregistré tout de suite.',
+    ].filter((l) => l !== null && l !== undefined && l !== '').join('\n'));
+  const select = rang(new StringSelectMenuBuilder()
+    .setCustomId('cfg:section')
+    .setPlaceholder('⚙️ Que veux-tu configurer ?')
+    .addOptions(SECTIONS.map((s) => ({ label: s.label, value: s.valeur, description: s.aide.slice(0, 95) }))));
+  return { embeds: [embed], components: [select] };
+}
+
+// ─── état lisible des réglages, pour les cartes ───
+function etatAccueil(G) {
+  const b = stockage.reglages(G).bienvenue || {};
+  return {
+    salon: b.salon ? `<#${b.salon}>` : '_non défini — accueil coupé_',
+    role: b.role ? `<@&${b.role}>` : '_aucun_',
+    langue: b.langue === 'en' ? 'WELCOME (anglais)' : 'BIENVENUE (français)',
+    fond: b.fond ? `🖼️ image perso : <${b.fond}>` : `🎨 thème « ${(bienvenueImage.NOMS_THEMES || {})[b.fondTheme] || 'Dégradé Otaku'} »`,
+    message: b.message ? `\`${String(b.message).slice(0, 90)}\`` : '_le message standard du bot_',
+  };
+}
+
+function carteRubrique(G, sec, channelId, note) {
+  const r = stockage.reglages(G);
+  const rub = RUBRIQUES[sec];
+  const embed = new EmbedBuilder().setColor(COULEUR).setTitle(rub.label).setDescription(
+    [note ? `**${note}**\n` : null, rub.intro, '\n👇 Choisis le réglage que tu veux changer — il aura sa propre carte.']
+      .filter(Boolean).join('\n'),
+  );
+  const a = r.automod || {};
+  if (sec === 'accueil') {
+    const e = etatAccueil(G);
+    embed.addFields(
+      { name: '📋 Salon de bienvenue', value: e.salon, inline: true },
+      { name: '🎭 Rôle automatique', value: e.role, inline: true },
+      { name: '🌍 Langue de la carte', value: e.langue, inline: true },
+      { name: '🖼️ Fond de la carte', value: e.fond, inline: true },
+      { name: '✏️ Message', value: e.message },
+    );
+  } else if (sec === 'salons') {
+    embed.addFields(
+      { name: '🗂️ Journal du staff', value: r.logs ? `<#${r.logs}>` : '_non défini_', inline: true },
       { name: '📜 Salon des règles', value: r.guide.regles ? `<#${r.guide.regles}>` : '_non défini_', inline: true },
       { name: '🛟 Contacter le staff', value: r.guide.support ? `<#${r.guide.support}>` : '_non défini_', inline: true },
-      { name: '👋 Bienvenue', value: b.salon
-        ? `<#${b.salon}>` + (b.role ? ` · rôle <@&${b.role}>` : '') + ` · ${b.langue === 'en' ? 'WELCOME (en)' : 'BIENVENUE (fr)'}` + (b.fond ? ' · 🖼️ fond perso' : '')
-        : '_coupée_', inline: false },
-      { name: '⚖️ Sanction auto', value: a.sanctionAuto ? `${a.seuilAvert || 3} avertis → mute ${a.dureeSanction || 60} min` : '_désactivée_', inline: true },
-      { name: '🤖 IA', value: iaR.active === false ? '_coupée partout_' : (iaCoupeeIci ? '🔇 coupée dans ce salon' : '🟢 active'), inline: true },
-      { name: '🎭 Personnalité', value: iaR.consigne ? `> ${String(iaR.consigne).slice(0, 90)}` : '_standard_', inline: false },
     );
-
-  const rows = [selectSection(sec)];
-
-  if (!sec) {
-    return { embeds: [embed], components: rows };   // petit panneau : le sélecteur, rien d'autre
+  } else if (sec === 'automod') {
+    const actifs = Object.entries(MODULES).filter(([cle]) => a[cle]).map(([, m]) => m.nom);
+    embed.addFields(
+      { name: '🧰 Modules actifs', value: actifs.length ? actifs.join(' · ') : '_aucun — tout est coupé_' },
+      { name: '🤫 Salon exempté', value: a.salonExempt ? `<#${a.salonExempt}>` : '_aucun_', inline: true },
+    );
+  } else if (sec === 'sanctions') {
+    embed.addFields({
+      name: '⚖️ Formule actuelle',
+      value: a.sanctionAuto ? `**${a.seuilAvert || 3}** avertissement(s) → sourdine **${a.dureeSanction || 60} min**` : '_désactivée — les avertissements s\'empilent sans effet_',
+    });
+  } else if (sec === 'ia') {
+    const iaR = r.ia || {};
+    const coupeeIci = Boolean(channelId && (iaR.salonBloques || []).includes(channelId));
+    embed.addFields(
+      { name: '🤖 État pour ce salon', value: iaR.active === false ? '_coupée partout_' : (coupeeIci ? '🔇 coupée ici' : '🟢 active ici'), inline: true },
+      { name: '🎭 Personnalité', value: iaR.consigne ? `> ${String(iaR.consigne).slice(0, 90)}` : '_standard_', inline: true },
+    );
   }
+  const menu = rang(new StringSelectMenuBuilder()
+    .setCustomId('cfg:item')
+    .setPlaceholder('🔧 Quel réglage veux-tu changer ?')
+    .addOptions(Object.entries(rub.items).map(([cle, it]) => ({
+      label: it.label.slice(0, 90), value: `${sec}:${cle}`, description: it.desc.split('\n')[0].replace(/[*`]/g, '').slice(0, 95),
+    }))));
+  return { embeds: [embed], components: [menu, rang(bouton('cfg:racine', 'Changer de rubrique', '🏠'))] };
+}
 
-  if (sec === 'accueil') {
+// ─── la carte PROPRE d'un réglage : description + valeur + son seul contrôle ───
+function carteReglage(G, sec, cle, channelId, note = null) {
+  const it = (RUBRIQUES[sec].items || {})[cle];
+  if (!it) return carteRubrique(G, sec, channelId, note);
+  const r = stockage.reglages(G);
+  const a = r.automod || {};
+  const b = r.bienvenue || {};
+  const iaR = r.ia || {};
+  const embed = new EmbedBuilder()
+    .setColor(COULEUR)
+    .setTitle(`${it.label}  —  ${RUBRIQUES[sec].label}`)
+    .setDescription([note ? `**${note}**\n` : null, it.desc].filter(Boolean).join('\n'));
+
+  const rows = [];
+  const selectCanal = (id, place) => rang(new ChannelSelectMenuBuilder().setCustomId(id).setPlaceholder(place)
+    .addChannelTypes(ChannelType.GuildText, ChannelType.GuildAnnouncement));
+
+  if (sec === 'accueil' && cle === 'salon') {
+    embed.addFields({ name: 'Actuellement', value: b.salon ? `<#${b.salon}>` : '_aucun salon — accueil coupé_' });
+    rows.push(selectCanal('cfg:accueil:salon', '📋 Dans quel salon souhaiter la bienvenue ?'));
+  } else if (sec === 'accueil' && cle === 'role') {
+    embed.addFields({ name: 'Actuellement', value: b.role ? `<@&${b.role}>` : '_aucun rôle automatique_' });
     rows.push(
-      selectCanal('cfg:accueil:salon', '📋 Dans quel salon souhaiter la bienvenue ?'),
       rang(new RoleSelectMenuBuilder().setCustomId('cfg:accueil:role')
-        .setPlaceholder('🎭 Rôle donné automatiquement aux nouveaux (optionnel)')),
-      rang(
-        bouton('cfg:accueil:msg', 'Écrire le message', '✏️', ButtonStyle.Primary),
-        bouton('cfg:accueil:role-off', 'Retirer le rôle', '🧹'),
-        bouton('cfg:accueil:off', 'Couper l\'accueil', '🔕'),
-      ),
+        .setPlaceholder('🎭 Choisis le rôle à donner automatiquement aux nouveaux')),
+      rang(bouton('cfg:accueil:role-off', 'Retirer le rôle', '🧹')),
     );
-  }
-
-  if (sec === 'salons') {
+  } else if (sec === 'accueil' && cle === 'langue') {
+    embed.addFields({ name: 'Actuellement', value: b.langue === 'en' ? 'WELCOME (anglais)' : 'BIENVENUE (français)' });
+    rows.push(rang(new StringSelectMenuBuilder().setCustomId('cfg:accueil:langue').setPlaceholder('🌍 Choisis la langue de la carte')
+      .addOptions(
+        { label: 'BIENVENUE (français)', value: 'fr', default: b.langue !== 'en' },
+        { label: 'WELCOME (anglais)', value: 'en', default: b.langue === 'en' },
+      )));
+  } else if (sec === 'accueil' && cle === 'fond') {
+    embed.addFields({ name: 'Actuellement', value: b.fond ? `🖼️ image perso : <${b.fond}>` : `🎨 thème « ${(bienvenueImage.NOMS_THEMES || {})[b.fondTheme] || 'Dégradé Otaku'} »` });
     rows.push(
-      selectCanal('cfg:salons:logs', '🗂️ Logs du staff — sanctions, alertes, filtres (privé)'),
-      selectCanal('cfg:salons:regles', '📜 Salon des règles du serveur'),
-      selectCanal('cfg:salons:support', '🛟 Salon où contacter le staff (aide, signalements)'),
-      rang(
-        bouton('cfg:salons:logs-off', 'Retirer les logs', '🧹'),
-        bouton('cfg:salons:regles-off', 'Retirer les règles', '🧹'),
-        bouton('cfg:salons:support-off', 'Retirer le support', '🧹'),
-      ),
-    );
-  }
-
-  if (sec === 'automod') {
-    rows.push(
-      rang(new StringSelectMenuBuilder()
-        .setCustomId('cfg:modules')
-        .setPlaceholder('🛡️ Modules actifs (décoche pour désactiver)')
-        .setMinValues(0)
-        .setMaxValues(Object.keys(MODULES).length)
-        .addOptions(Object.entries(MODULES).map(([cle, m]) => ({
-          label: m.nom, value: cle, description: m.aide.slice(0, 95),
-          emoji: a[cle] ? '✅' : '⬜', default: Boolean(a[cle]),
+      rang(new StringSelectMenuBuilder().setCustomId('cfg:accueil:fond').setPlaceholder('🎨 Choisis un fond « maison »')
+        .addOptions(Object.entries(bienvenueImage.THEMES || { defaut: { nom: 'Dégradé Otaku' } }).map(([cle2, t]) => ({
+          label: t.nom, value: cle2, default: !b.fond && (b.fondTheme || 'defaut') === cle2,
         })))),
-      selectCanal('cfg:exempt', '🤫 Un salon où l\'auto-mod ne filtre jamais ?'),
-      rang(bouton('cfg:exempt-off', 'Retirer l\'exemption', '🧹')),
+      rang(bouton('cfg:accueil:fond-url', 'Image perso (URL)', '🖼️', ButtonStyle.Primary),
+        bouton('cfg:accueil:fond-off', 'Revenir au thème', '🧹')),
     );
-  }
-
-  if (sec === 'sanctions') {
+  } else if (sec === 'accueil' && cle === 'message') {
+    embed.addFields({ name: 'Actuellement', value: b.message ? `\`${String(b.message).slice(0, 90)}\`` : '_le message standard_\n> ' + MESSAGE_DEFAUT.slice(0, 90) });
+    rows.push(rang(bouton('cfg:accueil:msg', 'Écrire le message', '✏️', ButtonStyle.Primary),
+      bouton('cfg:accueil:msg-off', 'Revenir au standard', '🧹')));
+  } else if (sec === 'accueil' && cle === 'couper') {
+    embed.addFields({ name: 'Actuellement', value: b.salon ? `✅ accueil actif → <#${b.salon}>` : '🔕 accueil déjà coupé' });
+    rows.push(rang(bouton('cfg:accueil:off', b.salon ? 'Couper l\'accueil maintenant' : 'L\'accueil est déjà coupé', '🔕', b.salon ? ButtonStyle.Danger : ButtonStyle.Secondary)));
+  } else if (sec === 'salons') {
+    const actuel = cle === 'logs' ? r.logs : (r.guide || {})[cle];
+    embed.addFields({ name: 'Actuellement', value: actuel ? `<#${actuel}>` : '_non défini_' });
+    const libelles = { logs: '🗂️ Salon des journaux du staff', regles: '📜 Salon des règles', support: '🛟 Salon pour contacter le staff' };
+    rows.push(selectCanal(`cfg:salons:${cle}`, libelles[cle]));
+    rows.push(rang(bouton(`cfg:salons:${cle}-off`, 'Retirer ce salon', '🧹')));
+  } else if (sec === 'automod' && cle === 'modules') {
+    rows.push(rang(new StringSelectMenuBuilder()
+      .setCustomId('cfg:modules')
+      .setPlaceholder('🧰 Coche ce qui doit rester ACTIF (décoche = coupé)')
+      .setMinValues(0)
+      .setMaxValues(Object.keys(MODULES).length)
+      .addOptions(Object.entries(MODULES).map(([cle2, m]) => ({
+        label: m.nom, value: cle2, description: m.aide.slice(0, 95), default: Boolean(a[cle2]),
+      })))));
+  } else if (sec === 'automod' && cle === 'exempt') {
+    embed.addFields({ name: 'Actuellement', value: a.salonExempt ? `<#${a.salonExempt}>` : '_aucun salon exempté_' });
+    rows.push(selectCanal('cfg:exempt', '🤫 Un salon où l\'auto-mod ne filtre jamais ?'));
+    rows.push(rang(bouton('cfg:exempt-off', 'Retirer l\'exemption', '🧹')));
+  } else if (sec === 'sanctions' && cle === 'formule') {
+    embed.addFields({
+      name: 'Actuellement',
+      value: a.sanctionAuto ? `**${a.seuilAvert || 3}** avertissement(s) → sourdine **${a.dureeSanction || 60} min**` : '_désactivée_',
+    });
     rows.push(rang(new StringSelectMenuBuilder()
       .setCustomId('cfg:sanction')
-      .setPlaceholder('⚖️ Punition automatique après des avertissements')
-      .addOptions([
-        { label: 'Désactiver la sanction automatique', value: 'off', emoji: '⚪' },
-        { label: '3 avertissements → mute 1 h', value: '3:60', emoji: '🔇' },
-        { label: '3 avertissements → mute 24 h', value: '3:1440', emoji: '🔇' },
-        { label: '5 avertissements → mute 1 h', value: '5:60', emoji: '🔇' },
-        { label: 'Mute de 10 min dès le 1er avertissement', value: '1:10', emoji: '⏱️' },
-      ])));
+      .setPlaceholder('⚖️ Choisis une formule')
+      .addOptions(
+        { label: 'Désactiver la sanction automatique', value: 'off', emoji: '⚪', default: !a.sanctionAuto },
+        { label: '3 avertissements → mute 1 h', value: '3:60', emoji: '🔇', default: a.sanctionAuto && a.seuilAvert === 3 && a.dureeSanction === 60 },
+        { label: '3 avertissements → mute 24 h', value: '3:1440', emoji: '🔇', default: a.sanctionAuto && a.seuilAvert === 3 && a.dureeSanction === 1440 },
+        { label: '5 avertissements → mute 1 h', value: '5:60', emoji: '🔇', default: a.sanctionAuto && a.seuilAvert === 5 && a.dureeSanction === 60 },
+        { label: 'Mute de 10 min dès le 1er avertissement', value: '1:10', emoji: '⏱️', default: a.sanctionAuto && a.seuilAvert === 1 && a.dureeSanction === 10 },
+      )));
+  } else if (sec === 'ia' && cle === 'ici') {
+    const coupee = Boolean(channelId && (iaR.salonBloques || []).includes(channelId));
+    embed.addFields({ name: 'Dans ce salon', value: iaR.active === false ? '_IA coupée partout (valeur par défaut)_' : (coupee ? '🔇 coupée' : '🟢 active') });
+    rows.push(rang(bouton('cfg:ia-ici', coupee ? 'Réactiver l\'IA ici' : 'Couper l\'IA ici', coupee ? '🟢' : '🔇', coupee ? ButtonStyle.Success : ButtonStyle.Danger)));
+  } else if (sec === 'ia' && cle === 'personnalite') {
+    embed.addFields({ name: 'Actuellement', value: iaR.consigne ? `> ${String(iaR.consigne).slice(0, 120)}` : '_standard_' });
+    rows.push(rang(bouton('cfg:perso', 'Écrire la personnalité', '🎭', ButtonStyle.Primary)));
+  } else if (sec === 'ia' && cle === 'memo') {
+    rows.push(rang(bouton('cfg:memo', 'Oublier la conversation de CE salon', '🧠', ButtonStyle.Danger)));
   }
 
-  if (sec === 'ia') {
-    rows.push(
-      rang(
-        bouton('cfg:ia-ici', iaCoupeeIci ? 'Réactiver l\'IA ici' : 'Couper l\'IA ici', iaCoupeeIci ? '🟢' : '🔇', iaCoupeeIci ? ButtonStyle.Success : ButtonStyle.Secondary),
-        bouton('cfg:perso', 'Personnalité de l\'IA', '🎭', ButtonStyle.Primary),
-      ),
-      rang(bouton('cfg:memo', 'Oublier la conversation de ce salon', '🧠')),
-    );
-  }
-
+  rows.push(boutonRetour());
   return { embeds: [embed], components: rows };
+}
+
+// ─── l'écran à afficher selon l'endroit où on est (rubrique ou réglage) ───
+function ecranCourant(G, channelId, note, forcerRubrique = false) {
+  const r = stockage.reglages(G);
+  const sec = r.cfgSection;
+  if (!sec) return ecranRacine(note);
+  if (!forcerRubrique && r.cfgItem && RUBRIQUES[sec].items[r.cfgItem]) {
+    return carteReglage(G, sec, r.cfgItem, channelId, note);
+  }
+  return carteRubrique(G, sec, channelId, note);
+}
+
+// Compat : le test d'aperçu et /tmp/parcours utilisent ce nom.
+function panneauPrincipal(guildId, channelId = null, section = null, note = null) {
+  if (section) return carteRubrique(guildId, section, channelId, note);
+  const courant = stockage.reglages(guildId).cfgSection;
+  return courant ? carteRubrique(guildId, courant, channelId, note) : ecranRacine(note);
 }
 
 // ─── la commande ───
@@ -172,16 +347,14 @@ module.exports = {
 
   data: new SlashCommandBuilder()
     .setName('config')
-    .setDescription('Le panneau de configuration : sections, menus déroulants, zéro saisie')
+    .setDescription('Le panneau de configuration : une carte par réglage, zéro saisie')
     .setDefaultMemberPermissions(PermissionsBitField.Flags.ManageGuild),
 
   async executer(interaction) {
     const refus = perms.verifier(interaction, PermissionsBitField.Flags.ManageGuild);
     if (refus) return panneaux.oups(interaction, '🚫 Action impossible', refus);
-    return interaction.reply({
-      ...panneauPrincipal(interaction.guildId, interaction.channelId),
-      ephemeral: true,
-    }).catch(() => null);
+    // Règle posée par l'admin : /config ouvre TOUJOURS le sélecteur de rubriques seul.
+    return interaction.reply({ ...ecranRacine(), ephemeral: true }).catch(() => null);
   },
 
   // ─── menus, sélecteurs, boutons, formulaires ───
@@ -196,26 +369,41 @@ module.exports = {
     }
 
     const G = interaction.guildId;
-    const maj = (morceau, note) => {
-      stockage.majReglages(G, morceau);
-      return rafraichir(interaction, note);
-    };
+    const montrer = (note, forcerRubrique = false) => rafraichir(interaction, note, forcerRubrique);
+    // appliquer un réglage = enregistrer + rester sur la carte (avec le ✓), sauf navigation
+    const maj = (morceau, note) => { stockage.majReglages(G, morceau); return montrer(note); };
 
-    // ── navigation entre sections ──
+    // ── navigation ──
     if (id === 'cfg:section' && interaction.isStringSelectMenu()) {
-      stockage.majReglages(G, { cfgSection: interaction.values[0] });
-      await rafraichir(interaction, null);
+      stockage.majReglages(G, { cfgSection: interaction.values[0], cfgItem: null });
+      await rafraichir(interaction, null, true);   // on entre dans la rubrique : jamais la carte d'un réglage
+      return true;
+    }
+    if (id === 'cfg:item' && interaction.isStringSelectMenu()) {
+      const [sec, cle] = String(interaction.values[0]).split(':');
+      stockage.majReglages(G, { cfgSection: sec, cfgItem: RUBRIQUES[sec]?.items?.[cle] ? cle : null });
+      await rafraichir(interaction, null, false);
+      return true;
+    }
+    if (id === 'cfg:retour') {
+      stockage.majReglages(G, { cfgItem: null });
+      await rafraichir(interaction, null, true);
+      return true;
+    }
+    if (id === 'cfg:racine') {
+      stockage.majReglages(G, { cfgSection: null, cfgItem: null });
+      await rafraichir(interaction, null, true);
       return true;
     }
 
-    // ── accueil ──
+    // ── accueil ─
     if (id === 'cfg:accueil:salon' && interaction.isChannelSelectMenu()) {
       const salon = interaction.channels.first();
       return maj({ bienvenue: { salon: salon ? salon.id : null } },
         salon ? `✅ Bienvenue envoyée dans <#${salon.id}>.` : '✅ Bienvenue mise à jour.');
     }
-    if (id === 'cfg:accueil:role' && interaction.isRoleSelectMenu?.()) {
-      const role = interaction.roles?.first();
+    if (id === 'cfg:accueil:role') {
+      const role = interaction.roles?.first?.() || null;
       return maj({ bienvenue: { role: role ? role.id : null } },
         role ? `✅ Les nouveaux membres recevront **${role.name}** automatiquement.` : '✅ Rôle mis à jour.');
     }
@@ -227,31 +415,31 @@ module.exports = {
       return maj({ bienvenue: { langue } },
         langue === 'en' ? '🌍 La carte affichera « WELCOME ».' : '🌍 La carte affichera « BIENVENUE ».');
     }
-    if (id === 'cfg:accueil:fond') {
-      const actuelle = (stockage.reglages(G).bienvenue || {}).fond || '';
-      const modal = new ModalBuilder().setCustomId('cfg:accueil:fond-modal').setTitle('🖼️ Image de fond de la carte');
-      const champ = new TextInputBuilder()
-        .setCustomId('url')
-        .setLabel('Adresse de l\'image (https://…)')
-        .setPlaceholder('Colle une URL d\'image · vide = fondu dégradé du bot')
-        .setStyle(TextInputStyle.Short).setMaxLength(500).setRequired(false)
-        .setValue(actuelle.slice(0, 500));
-      modal.addComponents(new ActionRowBuilder().addComponents(champ));
-      await interaction.showModal(modal).catch(() => null);
-      return true;
+    if (id === 'cfg:accueil:fond' && interaction.isStringSelectMenu()) {
+      const v = interaction.values[0];
+      return maj({ bienvenue: { fondTheme: v === 'defaut' ? null : v, fond: null } },
+        v === 'defaut' ? '🎨 Fond : dégradé Otaku.' : `🎨 Fond : « ${(bienvenueImage.NOMS_THEMES || {})[v] || v} ».`);
+    }
+    if (id === 'cfg:accueil:fond-off') {
+      return maj({ bienvenue: { fond: null } }, '🧹 Image perso retirée — le thème choisi reprend la main.');
+    }
+    if (id === 'cfg:accueil:fond-url') {
+      return ouvrirFondModal(interaction);
     }
     if (id === 'cfg:accueil:fond-modal') {
       const brut = String(interaction.fields?.getTextInputValue('url') || '').trim();
-      const verdict = require('../utils/bienvenue-image').validerUrlFond(brut);
+      const verdict = bienvenueImage.validerUrlFond(brut);
       if (!verdict.ok) {
         return maj({ bienvenue: { fond: null } },
-          '⚠️ Cette adresse n\'est pas une image en http(s) — fond dégradé du bot rétabli.');
+          '⚠️ Cette adresse n\'est pas une image en http(s) — fond par thème rétabli.');
       }
       return maj({ bienvenue: { fond: verdict.valeur } },
-        verdict.valeur ? '🖼️ Fond enregistré : les cartes utiliseront cette image.' : '🖼️ Fond retiré — le bot utilisera son dégradé maison.');
+        verdict.valeur ? '🖼️ Fond enregistré : les cartes utiliseront cette image.' : '🖼️ Fond retiré — le thème du bot reprend la main.');
     }
     if (id === 'cfg:accueil:off') {
-      return maj({ bienvenue: { salon: null } }, '🔕 Accueil coupé — plus de message de bienvenue.');
+      // « couper » se fait depuis la carte du réglage : on revient à la rubrique après.
+      stockage.majReglages(G, { bienvenue: { salon: null }, cfgItem: null });
+      return montrer('🔕 Accueil coupé — plus de message de bienvenue.', true);
     }
     if (id === 'cfg:accueil:msg') {
       const actuelle = (stockage.reglages(G).bienvenue || {}).message || MESSAGE_DEFAUT;
@@ -269,11 +457,14 @@ module.exports = {
       const valeur = String(interaction.fields?.getTextInputValue('message') || '').trim();
       return maj({ bienvenue: { message: valeur || null } }, valeur ? '✅ Message d\'accueil enregistré.' : '✅ Message remis par défaut.');
     }
+    if (id === 'cfg:accueil:msg-off') {
+      return maj({ bienvenue: { message: null } }, '🧹 Message standard rétabli.');
+    }
 
     // ── salons & repères ──
     if (id === 'cfg:salons:logs' && interaction.isChannelSelectMenu()) {
       const salon = interaction.channels.first();
-      return maj({ logs: salon ? salon.id : null }, salon ? `✅ Logs du staff dans <#${salon.id}>.` : '✅ Logs mis à jour.');
+      return maj({ logs: salon ? salon.id : null }, salon ? `✅ Journal du staff : <#${salon.id}>.` : '✅ Journal mis à jour.');
     }
     if (id === 'cfg:salons:regles' && interaction.isChannelSelectMenu()) {
       const salon = interaction.channels.first();
@@ -285,7 +476,7 @@ module.exports = {
       return maj({ guide: { support: salon ? salon.id : null } },
         salon ? `✅ Contacter le staff : les membres seront orientés vers <#${salon.id}>.` : '✅ Staff mis à jour.');
     }
-    if (id === 'cfg:salons:logs-off') return maj({ logs: null }, '🧹 Logs retirés.');
+    if (id === 'cfg:salons:logs-off') return maj({ logs: null }, '🧹 Journal retiré.');
     if (id === 'cfg:salons:regles-off') return maj({ guide: { regles: null } }, '🧹 Salon des règles retiré.');
     if (id === 'cfg:salons:support-off') return maj({ guide: { support: null } }, '🧹 Salon de support retiré.');
 
@@ -296,7 +487,7 @@ module.exports = {
       const automod = { seuilAvert: seuil };
       for (const cle of Object.keys(MODULES)) automod[cle] = choisis.includes(cle);
       return maj({ automod }, choisis.length
-        ? `✅ Actif : ${choisis.map((c) => MODULES[c]?.nom).filter(Boolean).join(', ')}.`
+        ? `✅ Actifs : ${choisis.map((c) => MODULES[c]?.nom).filter(Boolean).join(', ')}.`
         : '⚪ Tous les modules sont désactivés.');
     }
     if (id === 'cfg:exempt' && interaction.isChannelSelectMenu()) {
@@ -306,13 +497,13 @@ module.exports = {
     }
     if (id === 'cfg:exempt-off') return maj({ automod: { salonExempt: null } }, '🔕 Plus aucun salon exempté.');
 
-    // ── sanctions ─
+    // ── sanctions ──
     if (id === 'cfg:sanction' && interaction.isStringSelectMenu()) {
       const valeur = interaction.values[0];
       if (valeur === 'off') return maj({ automod: { sanctionAuto: false } }, '⚪ Sanction automatique désactivée.');
       const [seuil, duree] = valeur.split(':').map(Number);
       return maj({ automod: { sanctionAuto: true, seuilAvert: seuil, dureeSanction: duree } },
-        `⚖️ Activé : **${seuil} avertissement(s) → mute ${duree} min**.`);
+        `⚖️ Activé : **${seuil} avertissement(s) → sourdine ${duree} min**.`);
     }
 
     // ── IA ──
@@ -345,23 +536,41 @@ module.exports = {
     }
     if (id === 'cfg:memo') {
       ia.oublier(G, interaction.channelId);
-      await rafraichir(interaction, '🧠 Mémoire du salon oubliée.');
-      return true;
+      return montrer('🧠 Mémoire du salon oubliée.');
     }
 
-    await rafraichir(interaction, null);
+    await montrer(null);
     return true;
   },
 
   MODULES,
   SECTIONS,
+  RUBRIQUES,
   panneauPrincipal,
-  sectionCourante,
+  ecranCourant,
+  carteRubrique,
+  carteReglage,
+  etatAccueil,
 };
 
-/** Rafraîchit le panneau (ou l'envoie si le message d'origine n'est plus éditable). */
-async function rafraichir(interaction, note) {
-  const paquet = panneauPrincipal(interaction.guildId, interaction.channelId, null, note);
+/** Ouvre le formulaire « image de fond perso ». */
+async function ouvrirFondModal(interaction) {
+  const actuelle = (stockage.reglages(interaction.guildId).bienvenue || {}).fond || '';
+  const modal = new ModalBuilder().setCustomId('cfg:accueil:fond-modal').setTitle('🖼️ Image de fond de la carte');
+  const champ = new TextInputBuilder()
+    .setCustomId('url')
+    .setLabel('Adresse de l\'image (https://…)')
+    .setPlaceholder('Colle une URL d\'image · vide = thème du bot')
+    .setStyle(TextInputStyle.Short).setMaxLength(500).setRequired(false)
+    .setValue(actuelle.slice(0, 500));
+  modal.addComponents(new ActionRowBuilder().addComponents(champ));
+  await interaction.showModal(modal).catch(() => null);
+  return true;
+}
+
+/** Rafraîchit l'écran courant (ou l'envoie si le message d'origine n'est plus éditable). */
+async function rafraichir(interaction, note, forcerRubrique = false) {
+  const paquet = ecranCourant(interaction.guildId, interaction.channelId, note, forcerRubrique);
   try {
     await interaction.update(paquet);
   } catch {

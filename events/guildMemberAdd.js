@@ -72,6 +72,7 @@ module.exports = {
           : null,
         pseudo: membre.user?.username || 'nouveau membre',
         langue: reglages.bienvenue.langue || 'fr',
+        theme: reglages.bienvenue.fondTheme || null,
       });
       await cible.send({
         content: `<@${membre.id}>`,

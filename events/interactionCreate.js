@@ -11,7 +11,9 @@ module.exports = {
 
   async executer(client, interaction) {
     // ─── menus déroulants, boutons, sélecteurs ───
-    if (interaction.isStringSelectMenu?.() || interaction.isChannelSelectMenu?.() || interaction.isButton?.() || interaction.isModalSubmit?.()) {
+    if (interaction.isMessageComponent?.() || interaction.isModalSubmit?.()) {
+      // isMessageComponent couvre TOUS les composants : boutons, menus texte/salon/rôle/utilisateur/membles.
+      // (Un ancien oubli du sélecteur de rôle faisait « l'application n'a pas répondu » — ne jamais retirer.)
       for (const commande of client.commands.values()) {
         if (typeof commande.composant !== 'function') continue;
         try {

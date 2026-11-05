@@ -2,6 +2,7 @@ const assert = require('assert');
 const { membreMock, guildeMock, interactionMock, texteReponses } = require('./aide');
 const { chargerCommandes } = require('../utils/commandes');
 const interactionCreate = require('../events/interactionCreate');
+const stockage = require('../utils/stockage');
 
 const { commandes } = chargerCommandes();
 const cas = [];
@@ -175,6 +176,27 @@ test('routeur : une commande qui plante renvoie quand même un message', async (
   const faux = { ...clientFactice(), commands: new Map([['boom', { executer: async () => { throw new Error('boum'); } }]]) };
   await interactionCreate.executer(faux, inter);
   assert.ok(/erreur est survenue/i.test(texteReponses(inter)));
+});
+
+test('routeur : le sélecteur de RÔLE est bien acheminé (correction du « n\'a pas répondu à temps »)', async () => {
+  const G = `G-ROUTE-ROLE-${Date.now()}`;
+  const role = { id: 'R-OUVERT', name: 'Ouvert' };
+  const inter = {
+    customId: 'cfg:accueil:role',
+    guildId: G, channelId: 'C1',
+    isMessageComponent: () => true,
+    isRoleSelectMenu: () => true,
+    roles: { first: () => role },
+    inGuild: () => true, replied: false, deferred: false,
+    member: membreMock({ permissions: ['ManageGuild'] }),
+    user: { id: 'u1', tag: 'Staff#0001' },
+    journal: [],
+    async update(p) { this.journal.push(['update', p]); return {}; },
+    async reply(p) { this.journal.push(['reply', p]); return {}; },
+  };
+  await interactionCreate.executer(clientFactice(), inter);
+  assert.ok(inter.journal.some(([t]) => t === 'update'), 'aucune réponse envoyée au sélecteur de rôle');
+  assert.strictEqual(stockage.reglages(G).bienvenue.role, 'R-OUVERT', "le rôle n'a pas été enregistré");
 });
 
 test('routeur : ignore les interactions qui ne sont pas des commandes', async () => {
