@@ -19,10 +19,14 @@ const config = {
   gemini: {
     cle: process.env.GEMINI_API_KEY || '',
     modele: process.env.GEMINI_MODEL || 'gemini-3.5-flash',
+    // Si le modèle principal n'existe plus chez Google, on essaie ceux-ci.
+    secours: ['gemini-3.5-flash', 'gemini-2.5-flash', 'gemini-flash-lite-latest', 'gemini-3-flash-preview'],
   },
   groq: {
     cle: process.env.GROQ_API_KEY || '',
     modele: process.env.GROQ_MODEL || 'qwen/qwen3.8-27b',
+    // Idem chez Groq : la liste des modèles change souvent.
+    secours: ['qwen/qwen3.8-27b', 'openai/gpt-oss-120b', 'allam-2-7b'],
   },
   ia: {
     temperature: parseFloat(process.env.IA_TEMPERATURE || '0.7'),

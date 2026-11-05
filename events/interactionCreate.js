@@ -10,6 +10,27 @@ module.exports = {
   uneFois: false,
 
   async executer(client, interaction) {
+    // ─── menus déroulants, boutons, sélecteurs ───
+    if (interaction.isStringSelectMenu?.() || interaction.isChannelSelectMenu?.() || interaction.isButton?.()) {
+      for (const commande of client.commands.values()) {
+        if (typeof commande.composant !== 'function') continue;
+        try {
+          const pris = await commande.composant(interaction);
+          if (pris) return;
+        } catch (erreur) {
+          console.error(`⚠️ Composant ${interaction.customId} :`, erreur.message);
+          if (!interaction.replied && !interaction.deferred) {
+            await interaction.reply({
+              embeds: [panneaux.erreur('❌ Petit souci', 'Je n\'ai pas pu enregistrer ce réglage. Réessaie.')],
+              ephemeral: true,
+            }).catch(() => null);
+          }
+          return;
+        }
+      }
+      return;
+    }
+
     if (!interaction.isChatInputCommand()) return;
 
     const commande = client.commands.get(interaction.commandName);

@@ -30,9 +30,6 @@ function avecDelai(promesse, ms) {
 
 // ─────────────────────────── Gemini ───────────────────────────
 async function appelerGemini({ systeme, messages }, fetchImpl, signal) {
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/`
-    + `${encodeURIComponent(config.gemini.modele)}:generateContent?key=${encodeURIComponent(config.gemini.cle)}`;
-
   const corps = {
     systemInstruction: { parts: [{ text: systeme }] },
     contents: messages.map((m) => ({
@@ -45,54 +42,80 @@ async function appelerGemini({ systeme, messages }, fetchImpl, signal) {
     },
   };
 
-  const reponse = await fetchImpl(url, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(corps),
-    signal,
-  });
+  // On essaie le modèle configuré, puis les modèles de secours.
+  const modeles = [...new Set([config.gemini.modele, ...(config.gemini.secours || [])])];
+  let derniere = null;
 
-  if (!reponse.ok) {
-    const texte = await reponse.text().catch(() => '');
-    throw new ErreurIA(`Gemini ${reponse.status}`, { statut: reponse.status, texte: texte.slice(0, 300) });
+  for (const modele of modeles) {
+    const url = 'https://generativelanguage.googleapis.com/v1beta/models/'
+      + `${encodeURIComponent(modele)}:generateContent?key=${encodeURIComponent(config.gemini.cle)}`;
+
+    const reponse = await fetchImpl(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(corps),
+      signal,
+    });
+
+    if (!reponse.ok) {
+      const texte = await reponse.text().catch(() => '');
+      derniere = new ErreurIA(`Gemini ${reponse.status} (${modele})`,
+        { statut: reponse.status, modele, texte: texte.slice(0, 200) });
+      // 404 = modèle disparu, 429 = quota : on tente le suivant.
+      if ([400, 404, 429, 503].includes(reponse.status)) continue;
+      throw derniere;
+    }
+
+    const data = await reponse.json();
+    const parties = data?.candidates?.[0]?.content?.parts || [];
+    const texte = parties.map((p) => p.text || '').join('').trim();
+    if (texte) return texte;
+    derniere = new ErreurIA(`Gemini : réponse vide (${modele})`, { modele });
   }
 
-  const data = await reponse.json();
-  const parties = data?.candidates?.[0]?.content?.parts || [];
-  const texte = parties.map((p) => p.text || '').join('').trim();
-  if (!texte) throw new ErreurIA('Gemini : réponse vide');
-  return texte;
+  throw derniere || new ErreurIA('Gemini : aucun modèle disponible');
 }
 
 // ─────────────────────────── Groq ───────────────────────────
 async function appelerGroq({ systeme, messages }, fetchImpl, signal) {
-  const reponse = await fetchImpl('https://api.groq.com/openai/v1/chat/completions', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${config.groq.cle}`,
-    },
-    body: JSON.stringify({
-      model: config.groq.modele,
-      temperature: config.ia.temperature,
-      max_tokens: config.ia.maxTokens,
-      messages: [
-        { role: 'system', content: systeme },
-        ...messages.map((m) => ({ role: m.role === 'assistant' ? 'assistant' : 'user', content: m.contenu })),
-      ],
-    }),
-    signal,
-  });
+  const modeles = [...new Set([config.groq.modele, ...(config.groq.secours || [])])];
+  const messagesCorps = [
+    { role: 'system', content: systeme },
+    ...messages.map((m) => ({ role: m.role === 'assistant' ? 'assistant' : 'user', content: m.contenu })),
+  ];
+  let derniere = null;
 
-  if (!reponse.ok) {
-    const texte = await reponse.text().catch(() => '');
-    throw new ErreurIA(`Groq ${reponse.status}`, { statut: reponse.status, texte: texte.slice(0, 300) });
+  for (const modele of modeles) {
+    const reponse = await fetchImpl('https://api.groq.com/openai/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${config.groq.cle}`,
+      },
+      body: JSON.stringify({
+        model: modele,
+        temperature: config.ia.temperature,
+        max_tokens: config.ia.maxTokens,
+        messages: messagesCorps,
+      }),
+      signal,
+    });
+
+    if (!reponse.ok) {
+      const texte = await reponse.text().catch(() => '');
+      derniere = new ErreurIA(`Groq ${reponse.status} (${modele})`,
+        { statut: reponse.status, modele, texte: texte.slice(0, 200) });
+      if ([400, 404, 429, 503].includes(reponse.status)) continue;
+      throw derniere;
+    }
+
+    const data = await reponse.json();
+    const texte = (data?.choices?.[0]?.message?.content || '').trim();
+    if (texte) return texte;
+    derniere = new ErreurIA(`Groq : réponse vide (${modele})`, { modele });
   }
 
-  const data = await reponse.json();
-  const texte = (data?.choices?.[0]?.message?.content || '').trim();
-  if (!texte) throw new ErreurIA('Groq : réponse vide');
-  return texte;
+  throw derniere || new ErreurIA('Groq : aucun modèle disponible');
 }
 
 const APPELS = { gemini: appelerGemini, groq: appelerGroq };
@@ -127,7 +150,8 @@ async function demander(demande, options = {}) {
     }
   }
 
-  throw new ErreurIA(PHRASE_ECHEC, { essais });
+  const erreur = new ErreurIA(PHRASE_ECHEC, { essais });
+  return Promise.reject(erreur);
 }
 
 // ─────────────────────────── mémoire par salon ───────────────────────────

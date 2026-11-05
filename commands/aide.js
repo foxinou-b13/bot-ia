@@ -26,9 +26,8 @@ module.exports = {
       '`/clear` `/slowmode` `/lock` `/unlock` `/role` — gestion du salon',
       '',
       '**⚙️ Réglages**',
-      '`/automod` — spam, liens, insultes, majuscules, raid',
-      '`/logs` — salon des sanctions',
-      '`/bienvenue` — accueil des nouveaux membres',
+      '`/config` — ⭐ LE PANNEAU : tout se règle avec des menus déroulants',
+      '`/automod` `/logs` `/bienvenue` — les mêmes réglages, en commande directe',
       '',
       `_Cerveau : ${cerveau} · version ${config.version}_`,
     ].join('\n');

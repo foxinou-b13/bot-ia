@@ -86,12 +86,28 @@ function demarrerServeur() {
       reponse.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
       return reponse.end(corps);
     }
+    if (url === '/test-ia') {
+      // Teste les vraies clés IA depuis le serveur : indispensable pour dépanner.
+      const ia = require('./utils/ia');
+      ia.demander({ systeme: 'Réponds en un mot.', messages: [{ role: 'user', contenu: 'Dis OK' }] })
+        .then((r) => {
+          reponse.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
+          reponse.end(JSON.stringify({ ok: true, fournisseur: r.fournisseur, reponse: r.texte.slice(0, 200) }));
+        })
+        .catch((erreur) => {
+          reponse.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
+          reponse.end(JSON.stringify({ ok: false, erreur: erreur.message, details: erreur.details }, null, 2));
+        });
+      return;
+    }
     if (url === '/diagnostic') {
       const corps = JSON.stringify({
         ...etatJson(),
         commandes: [...client.commands.keys()].sort(),
         memoireMo: Math.round(process.memoryUsage().rss / 1048576),
         node: process.version,
+        commit: process.env.RENDER_GIT_COMMIT || process.env.GIT_COMMIT || 'inconnu',
+        modeles: { gemini: config.gemini.modele, groq: config.groq.modele },
       }, null, 2);
       reponse.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
       return reponse.end(corps);

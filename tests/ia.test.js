@@ -54,7 +54,37 @@ test('Gemini en panne → bascule sur Groq sans erreur visible', async () => {
   const r = await ia.demander({ systeme: 'x', messages: [{ role: 'user', contenu: 'salut' }] }, { fetchImpl });
   assert.strictEqual(r.texte, 'Réponse Groq');
   assert.strictEqual(r.fournisseur, 'groq');
-  assert.strictEqual(appels.length, 2);
+  // Gemini a essayé plusieurs modèles avant d'abandonner : c'est voulu.
+  assert.ok(appels.length >= 2, `seulement ${appels.length} appel(s)`);
+  assert.ok(appels[appels.length - 1].includes('groq'), 'le dernier essai doit être Groq');
+});
+
+test('Gemini : un modèle disparu → on essaie le suivant automatiquement', async () => {
+  const ia = chargerIA({ gemini: 'cle-gemini' });
+  const vus = [];
+  const fetchImpl = async (url) => {
+    const modele = url.match(/models\/([^:]+):/)?.[1];
+    vus.push(modele);
+    if (modele === 'gemini-3.5-flash') return reponseJson({ error: 'not found' }, false, 404);
+    return reponseJson({ candidates: [{ content: { parts: [{ text: 'OK secours' }] } }] });
+  };
+  const r = await ia.demander({ systeme: 'x', messages: [{ role: 'user', contenu: 'salut' }] }, { fetchImpl });
+  assert.strictEqual(r.texte, 'OK secours');
+  assert.ok(vus.length >= 2, 'un seul modèle essayé');
+  assert.strictEqual(vus[0], 'gemini-3.5-flash');
+});
+
+test('Groq : un modèle retiré par Groq → on essaie le suivant', async () => {
+  const ia = chargerIA({ groq: 'cle-groq' });
+  let n = 0;
+  const fetchImpl = async () => {
+    n += 1;
+    if (n === 1) return reponseJson({ error: 'model_not_found' }, false, 404);
+    return reponseJson({ choices: [{ message: { content: 'Groq secours' } }] });
+  };
+  const r = await ia.demander({ systeme: 'x', messages: [{ role: 'user', contenu: 'salut' }] }, { fetchImpl });
+  assert.strictEqual(r.texte, 'Groq secours');
+  assert.strictEqual(n, 2);
 });
 
 test('les deux en panne → ErreurIA avec phrase française', async () => {

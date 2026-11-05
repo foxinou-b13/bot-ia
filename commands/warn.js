@@ -31,9 +31,31 @@ module.exports = {
     });
     await sanctions.avertir(cible, { raison, auteur: interaction.user.tag, nombre: liste.length });
 
-    const palier = liste.length >= 3
+    // ─── sanction automatique réglée dans /config ───
+    const reglages = stockage.reglages(interaction.guildId);
+    const auto = reglages.automod;
+    let punition = '';
+
+    if (auto.sanctionAuto) {
+      const seuil = auto.seuilAvert || 3;
+      const minutes = auto.dureeSanction || 60;
+      if (liste.length >= seuil) {
+        const muted = await sanctions.rendreMuet(cible, {
+          raison: `Sanction automatique : ${liste.length} avertissements`,
+          auteur: `Automatique (seuil ${seuil})`,
+          ms: minutes * 60000,
+          dureeLisible: `${minutes} min`,
+        });
+        if (muted.ok) {
+          punition = `\n\n⚖️ **Sanction automatique appliquée** : exclusion de **${minutes} min** `
+            + `(seuil de ${seuil} avertissements atteint).`;
+        }
+      }
+    }
+
+    const palier = punition || (liste.length >= 3
       ? '\n\n⚠️ **3 avertissements atteints** : pense à un mute ou un ban si ça continue.'
-      : '';
+      : '');
 
     return interaction.editReply({
       embeds: [panneaux.succes('⚠️ Avertissement enregistré',
