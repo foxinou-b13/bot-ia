@@ -18,11 +18,11 @@ const config = {
   // ─── IA ───
   gemini: {
     cle: process.env.GEMINI_API_KEY || '',
-    modele: process.env.GEMINI_MODEL || 'gemini-2.5-flash',
+    modele: process.env.GEMINI_MODEL || 'gemini-3.5-flash',
   },
   groq: {
     cle: process.env.GROQ_API_KEY || '',
-    modele: process.env.GROQ_MODEL || 'llama-3.3-70b-versatile',
+    modele: process.env.GROQ_MODEL || 'qwen/qwen3.8-27b',
   },
   ia: {
     temperature: parseFloat(process.env.IA_TEMPERATURE || '0.7'),

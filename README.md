@@ -97,8 +97,8 @@ Tout se règle par variables d'environnement, sans toucher au code :
 
 | Variable | Par défaut | Effet |
 |---|---|---|
-| `GEMINI_MODEL` | `gemini-2.5-flash` | modèle Gemini |
-| `GROQ_MODEL` | `llama-3.3-70b-versatile` | modèle Groq |
+| `GEMINI_MODEL` | `gemini-3.5-flash` | modèle Gemini |
+| `GROQ_MODEL` | `qwen/qwen3.8-27b` | modèle Groq |
 | `IA_TEMPERATURE` | `0.7` | créativité (0 = sage, 1 = fantaisiste) |
 | `IA_MAX_TOKENS` | `900` | longueur max d'une réponse |
 | `IA_MEMOIRE` | `12` | messages retenus par salon |
