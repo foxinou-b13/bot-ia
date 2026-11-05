@@ -136,3 +136,16 @@ npm test
 
 Huit suites vérifient la détection auto-mod, les permissions, les sanctions, l'IA (bascule Gemini → Groq),
 les messages, la structure des commandes et la sécurité (aucun secret dans le code).
+
+
+## Panneau /config — sections (réorganisation)
+Tape `/config` : un menu « Que veux-tu configurer ? » avec 5 sections ; chaque section n'affiche que ses sélecteurs.
+- **👋 Accueil** : salon de bienvenue (sélecteur), message (formulaire), rôle automatique donné aux nouveaux (sélecteur de rôle).
+- **📋 Salons & repères** : logs du staff, salon des règles, salon support/tickets — boutons « retirer » pour annuler.
+- **🛡️ Auto-modération** : modules activables/désactivables + salon exempté.
+- **⚖️ Sanctions** : punition automatique après X avertissements.
+- **🤖 IA** : couper/réactiver par salon, personnalité (formulaire), oublier la mémoire.
+
+## /guide (public)
+Carte des repères (règles, support/tickets, accueil). L'IA (`/ask`, mention) reçoit les mêmes liens et répond
+« voici le salon » à toute question du type « où ouvrir un ticket ? ». Rien n'est inventé : que les salons réglés dans /config.

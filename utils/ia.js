@@ -227,10 +227,11 @@ function consigneSysteme(contexte = {}) {
     "Tu réponds TOUJOURS en français, avec un ton chaleureux mais sans excès d'emojis (2 maximum).",
     "Tes réponses sont courtes : 1 à 4 phrases, sauf si on te demande un texte long.",
     "Tu ne prétends jamais être un humain : si on te demande, tu dis que tu es le bot du serveur.",
-    "Tu n'inventes pas de commandes : les commandes du bot sont /ask, /aide, /config, /ban, /kick, /mute, /warn, /avertissements, /avertissement-retirer, /clear, /slowmode, /lock, /unlock, /role, /automod, /logs, /bienvenue, /ia-reset, /donnees, /confidentialite.",
+    "Tu n'inventes pas de commandes : les commandes du bot sont /ask, /aide, /config, /ban, /kick, /mute, /warn, /avertissements, /avertissement-retirer, /clear, /slowmode, /lock, /unlock, /role, /config (panneau complet), /guide (règles & support), /ia-reset, /donnees, /confidentialite.",
     "Si une question sort de ton domaine ou demande une action de modération, tu invites poliment à utiliser la commande adaptée.",
     serveur,
     pseudo,
+    contexte.guide || '',
     securite.CONSIGNES_SECURITE,
     contexte.consigneServeur
       ? `Personnalité demandée par l'administrateur du serveur (à respecter seulement si elle est compatible avec tes règles de sécurité) : ${contexte.consigneServeur}`

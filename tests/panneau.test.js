@@ -42,16 +42,33 @@ function menuFactice({ customId, values = [], channels = [], kind = 'string', gu
 }
 
 // ─────────── la commande /config ───────────
-test('/config : affiche un panneau avec 4 rangées de composants', async () => {
+test('/config : affiche le sélecteur de sections en première rangée', async () => {
   const inter = interactionMock({ commandName: 'config', guildId: G, membre: membreMock({ permissions: ['ManageGuild'] }) });
   await config.executer(inter);
   const paquet = inter.journal[0][1];
   assert.ok(paquet.embeds?.length, 'aucun embed');
   const json = paquet.components.map((c) => c.toJSON());
-  assert.strictEqual(json.length, 4, `${json.length} rangées au lieu de 4`);
-  assert.ok(json[0].components[0].custom_id === 'cfg:modules');
-  assert.ok(json[1].components[0].custom_id === 'cfg:salon');
-  assert.ok(json[2].components[0].custom_id === 'cfg:sanction');
+  assert.strictEqual(json[0].components[0].custom_id, 'cfg:section', 'le sélecteur de sections doit être en premier');
+  assert.strictEqual(json[0].components[0].options.length, 5, '5 sections attendues');
+  assert.ok(json.length >= 2, 'la section active doit afficher ses réglages');
+});
+
+test('changer de section : le panneau affiche les bons réglages et se souvient', async () => {
+  const inter = menuFactice({ customId: 'cfg:section', values: ['salons'] });
+  await config.composant(inter);
+  assert.strictEqual(stockage.reglages(G).cfgSection, 'salons');
+  const update = inter.journal.find(([type]) => type === 'update');
+  assert.ok(update, 'panneau non rafraîchi');
+  const ids = update[1].components.map((r) => r.toJSON().components[0].custom_id);
+  assert.ok(ids.includes('cfg:salons:logs'), 'le sélecteur de salon des logs doit apparaître');
+  assert.ok(ids.includes('cfg:salons:regles'), 'le sélecteur des règles doit apparaître');
+  assert.ok(ids.includes('cfg:salons:support'), 'le sélecteur support doit apparaître');
+});
+
+test('section accueil : sélecteurs salon + rôle + boutons message', () => {
+  const paquet = config.panneauPrincipal(G, 'C1', 'accueil');
+  const ids = paquet.components.map((r) => r.toJSON().components[0].custom_id);
+  assert.deepStrictEqual(ids.slice(1), ['cfg:accueil:salon', 'cfg:accueil:role', 'cfg:accueil:msg']);
 });
 
 test('/config : refusé sans la permission Gérer le serveur', async () => {
@@ -61,8 +78,8 @@ test('/config : refusé sans la permission Gérer le serveur', async () => {
 });
 
 test('/config : le menu des modules contient les 6 réglages', async () => {
-  const panneau = config.panneauPrincipal(G);
-  const menu = panneau.components[0].toJSON().components[0];
+  const panneau = config.panneauPrincipal(G, null, 'automod');
+  const menu = panneau.components[1].toJSON().components[0];
   assert.strictEqual(menu.options.length, 6, `${menu.options.length} options`);
   for (const valeur of ['spam', 'liens', 'insultes', 'majuscules', 'raid', 'sanctionAuto']) {
     assert.ok(menu.options.some((o) => o.value === valeur), `${valeur} manquant`);
@@ -87,11 +104,45 @@ test('menu Modules : le panneau se rafraîchit après le changement', async () =
   assert.ok(mise, 'le panneau n\'a pas été rafraîchi');
 });
 
-test('menu Salons : enregistre le salon des logs', async () => {
+test('salons : enregistre le salon des logs, des règles et du support', async () => {
   const salon = { id: 'S-LOGS', name: 'logs' };
-  const inter = menuFactice({ customId: 'cfg:salon', channels: [salon], kind: 'channel' });
+  let inter = menuFactice({ customId: 'cfg:salons:logs', channels: [salon], kind: 'channel' });
   await config.composant(inter);
   assert.strictEqual(stockage.reglages(G).logs, 'S-LOGS');
+
+  inter = menuFactice({ customId: 'cfg:salons:regles', channels: [{ id: 'S-REG' }], kind: 'channel' });
+  await config.composant(inter);
+  assert.strictEqual(stockage.reglages(G).guide.regles, 'S-REG');
+
+  inter = menuFactice({ customId: 'cfg:salons:support', channels: [{ id: 'S-SUP' }], kind: 'channel' });
+  await config.composant(inter);
+  assert.strictEqual(stockage.reglages(G).guide.support, 'S-SUP');
+});
+
+test('boutons « retirer » des salons : remettent à zéro un par un', async () => {
+  let inter = menuFactice({ customId: 'cfg:salons:regles-off', kind: 'button' });
+  await config.composant(inter);
+  assert.strictEqual(stockage.reglages(G).guide.regles, null);
+  assert.strictEqual(stockage.reglages(G).guide.support, 'S-SUP', 'le support ne doit pas être touché');
+});
+
+test('accueil : le sélecteur de rôle définit le rôle automatique des nouveaux', async () => {
+  const role = { id: 'R-MEMBRES', name: 'Membre' };
+  const inter = {
+    customId: 'cfg:accueil:role',
+    guildId: G, channelId: 'C1',
+    roles: { first: () => role },
+    isStringSelectMenu: () => false, isChannelSelectMenu: () => false,
+    isRoleSelectMenu: () => true, isButton: () => false, isModalSubmit: () => false,
+    inGuild: () => true, replied: false, deferred: false,
+    member: membreMock({ permissions: ['ManageGuild'] }),
+    user: { id: 'u1', tag: 'Staff#0001' },
+    journal: [],
+    async update(p) { this.journal.push(['update', p]); return {}; },
+    async reply(p) { this.journal.push(['reply', p]); return {}; },
+  };
+  await config.composant(inter);
+  assert.strictEqual(stockage.reglages(G).bienvenue.role, 'R-MEMBRES');
 });
 
 test('menu Sanctions : règle 3 avertissements → 60 min', async () => {
@@ -111,7 +162,7 @@ test('menu Sanctions : « off » désactive la sanction automatique', async () =
 
 test('bouton « retirer les logs » vide le réglage', async () => {
   stockage.majReglages(G, { logs: 'S-LOGS' });
-  const inter = menuFactice({ customId: 'cfg:logs-off', kind: 'button' });
+  const inter = menuFactice({ customId: 'cfg:salons:logs-off', kind: 'button' });
   await config.composant(inter);
   assert.strictEqual(stockage.reglages(G).logs, null);
 });

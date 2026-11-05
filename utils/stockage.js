@@ -51,7 +51,9 @@ function ecrire(nom, donnees) {
 // ─── réglages par serveur ───
 const REGLAGES_DEFAUT = {
   logs: null,
-  bienvenue: { salon: null, message: null },
+  guide: { regles: null, support: null },
+  cfgSection: 'modules',
+  bienvenue: { salon: null, message: null, role: null },
   automod: {
     spam: true,
     liens: true,
@@ -75,6 +77,7 @@ function reglages(guildId) {
     ...REGLAGES_DEFAUT,
     ...siens,
     bienvenue: { ...REGLAGES_DEFAUT.bienvenue, ...(siens.bienvenue || {}) },
+    guide: { ...REGLAGES_DEFAUT.guide, ...(siens.guide || {}) },
     automod: { ...REGLAGES_DEFAUT.automod, ...(siens.automod || {}) },
     ia: { ...REGLAGES_DEFAUT.ia, ...(siens.ia || {}), salonBloques: [...((siens.ia || {}).salonBloques || [])] },
   };
@@ -87,6 +90,7 @@ function majReglages(guildId, morceau) {
     ...avant,
     ...morceau,
     bienvenue: { ...(avant.bienvenue || {}), ...(morceau.bienvenue || {}) },
+    guide: { ...(avant.guide || {}), ...(morceau.guide || {}) },
     automod: { ...(avant.automod || {}), ...(morceau.automod || {}) },
     ia: { ...(avant.ia || {}), ...(morceau.ia || {}) },
   };
@@ -123,7 +127,21 @@ function retirerAvert(guildId, userId, index) {
   return { ok: true, retire, liste };
 }
 
+/** Texte des repères à injecter dans le prompt IA (chaîne vide si rien de réglé). */
+function repereIA(guildId) {
+  const r = reglages(guildId);
+  const morceaux = [];
+  if (r.guide.regles) morceaux.push(`les règles du serveur se lisent dans <#${r.guide.regles}>`);
+  if (r.guide.support) morceaux.push(`pour contacter le staff ou ouvrir un ticket, c'est dans <#${r.guide.support}>`);
+  if (r.bienvenue.salon) morceaux.push(`les nouveaux membres sont accueillis dans <#${r.bienvenue.salon}>`);
+  if (!morceaux.length) return '';
+  return `Repères officiels du serveur (à communiquer poliment et avec le lien exact quand un membre cherche ça) : ${morceaux.join(' ; ')}. `
+    + 'Si on te demande « où sont les règles », « comment ouvrir un ticket », « comment contacter un modo », réponds en une phrase avec le lien concerné. '
+    + 'N\'INVENTE JAMAIS un salon ou un lien qui n\'est pas dans cette liste.';
+}
+
 module.exports = {
+  repereIA,
   DOSSIER,
   lire,
   ecrire,

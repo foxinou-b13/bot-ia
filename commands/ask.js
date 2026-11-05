@@ -52,6 +52,7 @@ module.exports = {
           serveur: interaction.guild?.name,
           pseudo: interaction.member?.displayName || interaction.user.username,
           consigneServeur: (stockage.reglages(interaction.guildId).ia || {}).consigne,
+          guide: stockage.repereIA(interaction.guildId),
         }),
         messages: [
           ...ia.memoire(interaction.guildId, interaction.channelId),

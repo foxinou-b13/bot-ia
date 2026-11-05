@@ -41,12 +41,24 @@ module.exports = {
       }
     }
 
+    // ─── rôle automatique (même si le message de bienvenue est coupé) ───
+    const { salon, message, role } = reglages.bienvenue || {};
+    let roleDonne = false;
+
+    if (role && !membre.user?.bot && typeof membre.roles?.add === 'function') {
+      try {
+        await membre.roles.add(role, 'Rôle automatique d\'accueil (Otaku)');
+        roleDonne = true;
+      } catch (erreur) {
+        console.error('⚠️ Rôle automatique non donné :', erreur.message);
+      }
+    }
+
     // ─── message de bienvenue ───
-    const { salon, message } = reglages.bienvenue || {};
-    if (!salon) return null;
+    if (!salon) return roleDonne || null;
 
     const cible = guild.channels?.cache?.get(salon);
-    if (!cible || typeof cible.send !== 'function') return null;
+    if (!cible || typeof cible.send !== 'function') return roleDonne || null;
 
     const nombre = guild.memberCount || 0;
     const texte = texteBienvenue(message || 'Bienvenue {membre} sur **{serveur}** !', membre, guild, nombre);
@@ -56,7 +68,7 @@ module.exports = {
       return true;
     } catch (erreur) {
       console.error('⚠️ Bienvenue non envoyée :', erreur.message);
-      return null;
+      return roleDonne || null;
     }
   },
 };

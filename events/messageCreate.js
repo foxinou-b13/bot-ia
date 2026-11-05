@@ -150,6 +150,7 @@ module.exports = {
           serveur: message.guild.name,
           pseudo: message.member?.displayName || message.author.username,
           consigneServeur: (stockage.reglages(message.guild.id).ia || {}).consigne,
+          guide: stockage.repereIA(message.guild.id),
         }),
         messages: [
           ...ia.memoire(message.guild.id, message.channel.id),
