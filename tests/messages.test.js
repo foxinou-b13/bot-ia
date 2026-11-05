@@ -91,7 +91,14 @@ test('mention suivie d\'une question : l\'IA répond', async () => {
   const message = messageFactice({ contenu: '<@bot-id> c\'est quoi un webhook ?', id: 'u-ia-1', guildId: 'G-IA' });
   await messageCreate.executer(client, message);
   assert.strictEqual(appelIA, avant + 1);
-  assert.strictEqual(message.channel.messagesEnvoyes[0].content, 'Réponse de test.');
+  // La réponse doit être dans une CARTE propre (embed), pas en texte brut.
+  const paquet = message.channel.messagesEnvoyes[0];
+  const carte = paquet.embeds?.[0];
+  assert.ok(carte, 'la réponse IA doit être dans une carte (embed)');
+  const texte = carte.data ? carte.data.description : carte.description;
+  assert.strictEqual(texte, 'Réponse de test.');
+  const pied = carte.data ? carte.data.footer : carte.footer;
+  assert.ok(pied?.text && /réponse en .* s/.test(pied.text), 'le temps de réponse doit être affiché');
 });
 
 test('une très longue réponse IA est découpée', async () => {

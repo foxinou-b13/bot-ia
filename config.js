@@ -18,9 +18,9 @@ const config = {
   // ─── IA ───
   gemini: {
     cle: process.env.GEMINI_API_KEY || '',
-    modele: process.env.GEMINI_MODEL || 'gemini-3.5-flash',
-    // Si le modèle principal n'existe plus chez Google, on essaie ceux-ci.
-    secours: ['gemini-3.5-flash', 'gemini-2.5-flash', 'gemini-flash-lite-latest', 'gemini-3-flash-preview'],
+    modele: process.env.GEMINI_MODEL || 'gemini-flash-lite-latest',
+    // Le « lite » répond en ~1 s. Si un modèle disparaît, on glisse au suivant.
+    secours: ['gemini-flash-lite-latest', 'gemini-3.5-flash', 'gemini-2.5-flash'],
   },
   groq: {
     cle: process.env.GROQ_API_KEY || '',
@@ -51,12 +51,18 @@ const config = {
   debut: Date.now(),
 };
 
-/** Quels fournisseurs d'IA ont une clé ? (dans l'ordre de préférence) */
+/** Quels fournisseurs d'IA ont une clé ? (dans l'ordre de préférence)
+ *  Groq d'abord : il répond en moins d'une seconde. Réglable avec IA_ORDRE=gemini,groq
+ */
 function fournisseursIA() {
-  const liste = [];
-  if (config.gemini.cle) liste.push('gemini');
-  if (config.groq.cle) liste.push('groq');
-  return liste;
+  const disponibles = new Set();
+  if (config.gemini.cle) disponibles.add('gemini');
+  if (config.groq.cle) disponibles.add('groq');
+  const ordre = (process.env.IA_ORDRE || 'groq,gemini')
+    .split(',').map((x) => x.trim().toLowerCase()).filter((x) => disponibles.has(x));
+  // Les clés actives non citées dans IA_ORDRE sont quand même essayées en secours.
+  for (const cle of disponibles) if (!ordre.includes(cle)) ordre.push(cle);
+  return ordre;
 }
 
 /** Vérification au démarrage : on prévient clairement de ce qui manque. */

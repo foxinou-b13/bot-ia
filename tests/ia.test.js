@@ -5,9 +5,11 @@ const cas = [];
 const test = (nom, fn) => cas.push({ nom, fn });
 
 /** Recharge le module IA avec des clés précises (les clés sont lues au chargement). */
-function chargerIA({ gemini = '', groq = '' } = {}) {
+function chargerIA({ gemini = '', groq = '', ordre = null } = {}) {
   process.env.GEMINI_API_KEY = gemini;
   process.env.GROQ_API_KEY = groq;
+  if (ordre) process.env.IA_ORDRE = ordre;
+  else delete process.env.IA_ORDRE;
   delete require.cache[chemin];
   delete require.cache[require.resolve('../config')];
   return require('../utils/ia');
@@ -43,20 +45,20 @@ test('Gemini répond : on récupère le texte', async () => {
   assert.ok(urlAppelee.includes('generativelanguage.googleapis.com'));
 });
 
-test('Gemini en panne → bascule sur Groq sans erreur visible', async () => {
-  const ia = chargerIA({ gemini: 'cle-gemini', groq: 'cle-groq' });
+test('Groq en panne → bascule sur Gemini sans erreur visible', async () => {
+  const ia = chargerIA({ gemini: 'cle-gemini', groq: 'cle-groq', ordre: 'groq,gemini' });
   const appels = [];
   const fetchImpl = async (url) => {
     appels.push(url);
-    if (url.includes('generativelanguage')) return reponseJson({ error: 'quota' }, false, 429);
-    return reponseJson({ choices: [{ message: { content: 'Réponse Groq' } }] });
+    if (url.includes('api.groq.com')) return reponseJson({ error: 'quota' }, false, 429);
+    return reponseJson({ candidates: [{ content: { parts: [{ text: 'Réponse Gemini' }] } }] });
   };
   const r = await ia.demander({ systeme: 'x', messages: [{ role: 'user', contenu: 'salut' }] }, { fetchImpl });
-  assert.strictEqual(r.texte, 'Réponse Groq');
-  assert.strictEqual(r.fournisseur, 'groq');
-  // Gemini a essayé plusieurs modèles avant d'abandonner : c'est voulu.
+  assert.strictEqual(r.texte, 'Réponse Gemini');
+  assert.strictEqual(r.fournisseur, 'gemini');
+  // Groq a essayé, puis Gemini (et peut-être plusieurs de ses modèles) : c'est voulu.
   assert.ok(appels.length >= 2, `seulement ${appels.length} appel(s)`);
-  assert.ok(appels[appels.length - 1].includes('groq'), 'le dernier essai doit être Groq');
+  assert.ok(appels[0].includes('groq'), 'le premier essai doit être Groq (le plus rapide)');
 });
 
 test('Gemini : un modèle disparu → on essaie le suivant automatiquement', async () => {
@@ -65,13 +67,14 @@ test('Gemini : un modèle disparu → on essaie le suivant automatiquement', asy
   const fetchImpl = async (url) => {
     const modele = url.match(/models\/([^:]+):/)?.[1];
     vus.push(modele);
-    if (modele === 'gemini-3.5-flash') return reponseJson({ error: 'not found' }, false, 404);
+    if (modele !== 'gemini-3.5-flash') return reponseJson({ error: 'not found' }, false, 404);
     return reponseJson({ candidates: [{ content: { parts: [{ text: 'OK secours' }] } }] });
   };
   const r = await ia.demander({ systeme: 'x', messages: [{ role: 'user', contenu: 'salut' }] }, { fetchImpl });
   assert.strictEqual(r.texte, 'OK secours');
   assert.ok(vus.length >= 2, 'un seul modèle essayé');
-  assert.strictEqual(vus[0], 'gemini-3.5-flash');
+  assert.strictEqual(vus[0], 'gemini-flash-lite-latest', 'le rapide doit être essayé en premier');
+  assert.ok(vus.includes('gemini-3.5-flash'), 'le secours quality doit être tenté');
 });
 
 test('Groq : un modèle retiré par Groq → on essaie le suivant', async () => {

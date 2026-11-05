@@ -113,15 +113,19 @@ module.exports = {
     const question = message.content.replace(/<@!?\d+>/g, '').trim();
     const limite = ia.tropRapide(message.author.id);
     if (limite.bloque) {
-      return message.reply({ content: `⏳ Attends ${limite.resteSecondes} s avant de me reparler.` }).catch(() => null);
+      return message.reply({
+        embeds: [panneaux.attention('⏳ Doucement', `Attends encore **${limite.resteSecondes} seconde(s)** avant de me reposer une question.`)],
+        allowedMentions: { repliedUser: false },
+      }).catch(() => null);
     }
 
     try {
       if (typeof message.channel.sendTyping === 'function') await message.channel.sendTyping();
     } catch { /* rien */ }
 
+    const debut = Date.now();
     try {
-      const { texte } = await ia.demander({
+      const { texte, fournisseur } = await ia.demander({
         systeme: ia.consigneSysteme({
           serveur: message.guild.name,
           pseudo: message.member?.displayName || message.author.username,
@@ -135,10 +139,21 @@ module.exports = {
       ia.memoriser(message.guild.id, message.channel.id, 'user', question);
       ia.memoriser(message.guild.id, message.channel.id, 'assistant', texte);
 
+      const secondes = ((Date.now() - debut) / 1000).toFixed(1);
+      const quoi = fournisseur === 'groq' ? '⚡ Groq' : '🔷 Gemini';
       const morceaux = ia.decouper(texte);
-      await message.reply({ content: morceaux[0], allowedMentions: { repliedUser: true } }).catch(() => null);
+
+      const carte = new (require('discord.js').EmbedBuilder)()
+        .setColor(panneaux.COULEUR)
+        .setDescription(morceaux[0])
+        .setFooter({ text: `${quoi} • réponse en ${secondes} s` })
+        .setTimestamp();
+      await message.reply({ embeds: [carte], allowedMentions: { repliedUser: false } }).catch(() => null);
       for (const suite of morceaux.slice(1)) {
-        await message.channel.send({ content: suite }).catch(() => null);
+        await message.channel.send({
+          embeds: [new (require('discord.js').EmbedBuilder)()
+            .setColor(panneaux.COULEUR).setDescription(suite).setFooter({ text: '⁘ ⁘ suite de la réponse' })],
+        }).catch(() => null);
       }
       return { ok: true };
     } catch (erreur) {

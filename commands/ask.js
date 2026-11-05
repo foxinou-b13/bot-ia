@@ -1,4 +1,4 @@
-const { SlashCommandBuilder } = require('discord.js');
+const { SlashCommandBuilder, EmbedBuilder } = require('discord.js');
 const ia = require('../utils/ia');
 const panneaux = require('../utils/panneaux');
 
@@ -27,6 +27,7 @@ module.exports = {
 
     await interaction.deferReply();
 
+    const debut = Date.now();
     try {
       const { texte, fournisseur } = await ia.demander({
         systeme: ia.consigneSysteme({
@@ -42,10 +43,20 @@ module.exports = {
       ia.memoriser(interaction.guildId, interaction.channelId, 'user', question);
       ia.memoriser(interaction.guildId, interaction.channelId, 'assistant', texte);
 
+      const secondes = ((Date.now() - debut) / 1000).toFixed(1);
+      const quoi = fournisseur === 'groq' ? '⚡ Groq' : '🔷 Gemini';
       const morceaux = ia.decouper(texte);
-      await interaction.editReply({ content: morceaux[0] }).catch(() => null);
+
+      const carte = new EmbedBuilder()
+        .setColor(panneaux.COULEUR)
+        .setDescription(morceaux[0])
+        .setFooter({ text: `${quoi} • réponse en ${secondes} s` })
+        .setTimestamp();
+      await interaction.editReply({ embeds: [carte] }).catch(() => null);
       for (const suite of morceaux.slice(1)) {
-        await interaction.followUp({ content: suite }).catch(() => null);
+        await interaction.followUp({
+          embeds: [new EmbedBuilder().setColor(panneaux.COULEUR).setDescription(suite).setFooter({ text: '⁘ ⁘ suite de la réponse' })],
+        }).catch(() => null);
       }
       return { fournisseur };
     } catch (erreur) {
