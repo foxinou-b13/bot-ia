@@ -232,5 +232,40 @@ test('toutes les commandes sont chargées, y compris la nouvelle', () => {
   assert.ok(chargerCommandes().commandes.has('image-bienvenue'), 'commande non enregistrée');
 });
 
+// ─── bouton « 📱 Choisir ton image » (ouvre la commande → galerie/PC) ───
+test('carte du fond : le bouton lien ouvre la commande quand son ID est connu', () => {
+  const carte = config.carteReglage('G-BI', 'accueil', 'fond', 'C1', null, { urlChoix: 'discord://?cmd=42' });
+  const boutons = carte.components[1].toJSON().components;
+  const lien = boutons.find((b) => b.style === 5);
+  assert.ok(lien, 'bouton lien absent');
+  assert.strictEqual(lien.url, 'discord://?cmd=42');
+  assert.ok(!lien.custom_id, 'un bouton lien ne prend pas de custom_id');
+});
+
+test('carte du fond : sans ID de commande, pas de bouton lien (repli propre)', () => {
+  const carte = config.carteReglage('G-BI', 'accueil', 'fond', 'C1', null, {});
+  const boutons = carte.components[1].toJSON().components;
+  assert.ok(!boutons.some((b) => b.style === 5), 'bouton lien inventé');
+  assert.ok(boutons.some((b) => b.custom_id === 'cfg:accueil:fond-url'), 'le repli URL doit rester');
+});
+
+test('lienCommandeImage : trouve l\'ID, le met en cache, pardonne les pannes', async () => {
+  let appels = 0;
+  const clientBon = {
+    application: { commands: { async fetch() { appels += 1; return [{ name: 'config', id: '1' }, { name: 'image-bienvenue', id: '777' }]; } } },
+  };
+  const url = await config.lienCommandeImage(clientBon);
+  assert.strictEqual(url, 'discord://?cmd=777', url);
+  const url2 = await config.lienCommandeImage(clientBon);
+  assert.strictEqual(url2, url);
+  assert.strictEqual(appels, 1, 'le cache doit éviter un second appel réseau');
+
+  const clientCasse = { application: { commands: { async fetch() { throw new Error('réseau KO'); } } } };
+  // le cache est encore valide → pas de panne visible ; après expiration, repli silencieux sur null
+  config.__viderCacheLien && config.__viderCacheLien();
+  const urlKo = await config.lienCommandeImage(clientCasse);
+  assert.ok(urlKo === null || urlKo.startsWith('discord://'), 'résultat inattendu en cas de panne : ' + urlKo);
+});
+
 module.exports = { nom: 'bienvenue-image', cas };
 if (require.main === module) require('./executeur')(module.exports);

@@ -35,6 +35,31 @@ const MODULES = {
   sanctionAuto: { nom: 'Sanction automatique', emoji: '⚖️', aide: 'Mute auto après plusieurs avertissements' },
 };
 
+/**
+ * Bouton « 📱 Choisir ton image » : l'URL discord://?cmd=<id> ouvre DIRECTEMENT
+ * la commande /image-bienvenue chez l'admin (galerie sur mobile, fichiers sur PC).
+ * L'ID de commande est récupéré auprès de Discord puis gardé 10 minutes en cache ;
+ * en cas d'indisponibilité, on l'omet simplement — le champ URL et la commande
+ * tapée à la main restent des solutions de repli.
+ */
+let lienCache = { url: null, expire: 0 };
+async function lienCommandeImage(client) {
+  const maintenant = Date.now();
+  if (lienCache.expire > maintenant) return lienCache.url;
+  try {
+    const collecte = await client?.application?.commands?.fetch?.();
+    const cmd = collecte && typeof collecte.find === 'function'
+      ? collecte.find((c) => c.name === 'image-bienvenue')
+      : null;
+    if (!cmd) { lienCache = { url: null, expire: maintenant + 120000 }; return null; }
+    lienCache = { url: `discord://?cmd=${cmd.id}`, expire: maintenant + 600000 };
+    return lienCache.url;
+  } catch {
+    lienCache = { url: null, expire: maintenant + 120000 };
+    return null;
+  }
+}
+
 // ─── les rubriques, et dans chaque rubrique : un réglage = une carte ───
 const RUBRIQUES = {
   accueil: {
@@ -56,7 +81,7 @@ const RUBRIQUES = {
       },
       fond: {
         label: '🖼️ Image de fond de la carte',
-        desc: 'Le décor derrière la photo du nouveau.\n• Un **fond « maison »** : choisis-le dans le menu ci-dessous ;\n• **TA propre image** (photo du téléphone, dessin…) : sur mobile comme sur PC, tape **/image-bienvenue** et JOINS l\'image — pas d\'URL à copier. Le bot la recadre tout seul au bon format (1280×720) quel que soit son taille ou sa forme, et t\'envoie un aperçu.\nLe bouton « 🔗 Adresse d\'image » reste utile si tu préfères coller un lien direct.',
+        desc: 'Le décor derrière la photo du nouveau.\n• Un **fond « maison »** : choisis-le dans le menu ci-dessous ;\n• **TA propre image** : touche le bouton « 📱 Choisir ton image » — la galerie du téléphone s\'ouvre (sur PC : le dossier des fichiers), tu sélectionnes, tu envoies. Pas d\'URL à recopier. Quelle que soit sa taille ou sa forme, le bot la recadre tout seul au format exact de la carte (1280×720) et t\'envoie un aperçu.',
       },
       message: {
         label: '✏️ Message d\'accroche',
@@ -224,7 +249,18 @@ function carteRubrique(G, sec, channelId, note) {
 }
 
 // ─── la carte PROPRE d'un réglage : description + valeur + son seul contrôle ───
-function carteReglage(G, sec, cle, channelId, note = null) {
+function boutonFondPersonnalisee(opts = {}) {
+  const rangee = [];
+  if (opts.urlChoix) {
+    rangee.push(new ButtonBuilder().setStyle(ButtonStyle.Link).setURL(opts.urlChoix)
+      .setLabel('Choisir ton image').setEmoji('📱'));
+  }
+  rangee.push(bouton('cfg:accueil:fond-url', 'Adresse d\'image (URL)', '🔗', ButtonStyle.Secondary),
+    bouton('cfg:accueil:fond-off', 'Enlever', '🧹'));
+  return rangee;
+}
+
+function carteReglage(G, sec, cle, channelId, note = null, opts = {}) {
   const it = (RUBRIQUES[sec].items || {})[cle];
   if (!it) return carteRubrique(G, sec, channelId, note);
   const r = stockage.reglages(G);
@@ -264,8 +300,7 @@ function carteReglage(G, sec, cle, channelId, note = null) {
         .addOptions(Object.entries(bienvenueImage.THEMES || { defaut: { nom: 'Dégradé Otaku' } }).map(([cle2, t]) => ({
           label: t.nom, value: cle2, default: !b.fond && (b.fondTheme || 'defaut') === cle2,
         })))),
-      rang(bouton('cfg:accueil:fond-url', 'Adresse d\'image (URL)', '🔗', ButtonStyle.Primary),
-        bouton('cfg:accueil:fond-off', 'Revenir au thème', '🧹')),
+      rang(...boutonFondPersonnalisee(opts)),
     );
   } else if (sec === 'accueil' && cle === 'message') {
     embed.addFields({ name: 'Actuellement', value: b.message ? `\`${String(b.message).slice(0, 90)}\`` : '_le message standard_\n> ' + MESSAGE_DEFAUT.slice(0, 90) });
@@ -324,14 +359,20 @@ function carteReglage(G, sec, cle, channelId, note = null) {
 }
 
 // ─── l'écran à afficher selon l'endroit où on est (rubrique ou réglage) ───
-function ecranCourant(G, channelId, note, forcerRubrique = false) {
+function ecranCourant(G, channelId, note, forcerRubrique = false, opts = {}) {
   const r = stockage.reglages(G);
   const sec = r.cfgSection;
   if (!sec) return ecranRacine(note);
   if (!forcerRubrique && r.cfgItem && RUBRIQUES[sec].items[r.cfgItem]) {
-    return carteReglage(G, sec, r.cfgItem, channelId, note);
+    return carteReglage(G, sec, r.cfgItem, channelId, note, opts);
   }
   return carteRubrique(G, sec, channelId, note);
+}
+
+/** Faut-il le lien du sélecteur d'image pour l'écran affiché ? (uniquement la carte « fond ») */
+function carteFondAffichee(G, forcerRubrique) {
+  const r = stockage.reglages(G);
+  return !forcerRubrique && r.cfgSection === 'accueil' && r.cfgItem === 'fond';
 }
 
 // Compat : le test d'aperçu et /tmp/parcours utilisent ce nom.
@@ -547,6 +588,8 @@ module.exports = {
   SECTIONS,
   RUBRIQUES,
   panneauPrincipal,
+  lienCommandeImage,
+  __viderCacheLien: () => { lienCache = { url: null, expire: 0 }; },   // pour les tests uniquement
   ecranCourant,
   carteRubrique,
   carteReglage,
@@ -570,7 +613,11 @@ async function ouvrirFondModal(interaction) {
 
 /** Rafraîchit l'écran courant (ou l'envoie si le message d'origine n'est plus éditable). */
 async function rafraichir(interaction, note, forcerRubrique = false) {
-  const paquet = ecranCourant(interaction.guildId, interaction.channelId, note, forcerRubrique);
+  const opts = {};
+  if (carteFondAffichee(interaction.guildId, forcerRubrique)) {
+    opts.urlChoix = await lienCommandeImage(interaction.client);
+  }
+  const paquet = ecranCourant(interaction.guildId, interaction.channelId, note, forcerRubrique, opts);
   try {
     await interaction.update(paquet);
   } catch {
