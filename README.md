@@ -149,3 +149,15 @@ Tape `/config` : un menu « Que veux-tu configurer ? » avec 5 sections ; chaque
 ## /guide (public)
 Carte des repères (règles, contact du staff, accueil). L'IA (`/ask`, mention) reçoit les mêmes liens et répond
 « voici le salon » à toute question du type « qui contacter ? ». Rien n'est inventé : que les salons réglés dans /config.
+
+
+## 💾 Persistance (recommandé pour un bot public)
+Render gratuit efface le disque à chaque redéploiement. Pour que chaque serveur
+garde ses réglages et avertissements, ajoute une base **gratuite** MongoDB Atlas :
+1. [cloud.mongodb.com](https://cloud.mongodb.com) → créer un compte gratuit → cluster **M0** (pas de carte).
+2. Security → Database Access → ajouter user (readWrite) → mot de passe.
+3. Security → Network Access → `Allow Access from Anywhere` (0.0.0.0/0).
+4. Connect → Drivers → copier la chaîne, remplacer `<password>` → la coller dans Render : variable `MONGODB_URI`.
+Le bot : `💾 Base de données reliée` dans les logs, restaurés au démarrage, miroir écrit en arrière-plan
+(fichiers `config` et `warns` dans la base `otaku`, collection `fichiers`). Sans la variable, tout marche
+aussi, mais les réglages repartent à zéro à chaque redéploiement.

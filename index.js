@@ -11,6 +11,7 @@ const { Client, Collection, GatewayIntentBits, Partials } = require('discord.js'
 const { config, verifierConfig, fournisseursIA } = require('./config');
 const { chargerCommandes } = require('./utils/commandes');
 const { DOSSIER } = require('./utils/stockage');
+const persistance = require('./utils/persistance');
 
 // ─────────────────────────── 1. le bot ───────────────────────────
 // Intents « privilégiés » : à activer dans le portail Discord (voir README).
@@ -75,6 +76,7 @@ function etatJson() {
     ia: fournisseursIA(),
     version: config.version,
     enLigneDepuisSecondes: Math.floor((Date.now() - demarre) / 1000),
+    persistance: persistance.etat().mode,
   };
 }
 
@@ -124,6 +126,27 @@ function demarrerServeur() {
 }
 
 // ─────────────────────────── 3. démarrage ───────────────────────────
+async function demarrage() {
+  // Base de données externe (MongoDB Atlas gratuit) : les réglages survivent
+  // aux redéploiements Render. Sans MONGODB_URI → mode fichier, comme avant.
+  try {
+    const reliee = await persistance.initialiser();
+    if (reliee) {
+      const n = await persistance.restaurer();
+      console.log(`💾 Base de données reliée — ${n} fichier(s) restauré(s). Les réglages des serveurs sont durables.`);
+    } else if (process.env.MONGODB_URI) {
+      console.warn('⚠️ MONGODB_URI indiqué mais injoignable : je tourne en mode fichier local.');
+    } else {
+      console.log('💾 Mode fichier local (MONGODB_URI non défini : les réglages repartent à zéro à chaque redéploiement).');
+    }
+  } catch (erreur) {
+    console.error('⚠️ Persistance :', erreur.message);
+  }
+
+  lancerBot();
+}
+
+function lancerBot() {
 const verification = verifierConfig();
 if (!verification.ok) {
   console.warn('⚠️ Configuration incomplète :');
@@ -157,6 +180,9 @@ if (!config.token) {
     console.error('   Vérifie que le token est bon et qu\'un seul bot utilise ce token.');
   });
 }
+}
+
+demarrage();
 
 // Le bot ne doit jamais tomber à cause d'une promesse oubliée.
 process.on('unhandledRejection', (raison) => {
@@ -165,8 +191,9 @@ process.on('unhandledRejection', (raison) => {
 process.on('uncaughtException', (erreur) => {
   console.error('⚠️ Exception non attrapée :', erreur?.message || erreur);
 });
-process.on('SIGTERM', () => {
+process.on('SIGTERM', async () => {
   console.log('👋 Arrêt demandé par Render, je me déconnecte proprement.');
+  try { await persistance.terminer(); } catch { /* rien */ }
   client.destroy();
   process.exit(0);
 });

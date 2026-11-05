@@ -7,6 +7,7 @@
  */
 const fs = require('fs');
 const path = require('path');
+const persistance = require('./persistance');
 
 const DOSSIER = path.join(__dirname, '..', 'data');
 
@@ -41,6 +42,7 @@ function ecrire(nom, donnees) {
     const tmp = `${f}.tmp`;
     fs.writeFileSync(tmp, JSON.stringify(donnees, null, 1), 'utf8');
     fs.renameSync(tmp, f);
+    try { persistance.publier(nom, donnees); } catch { /* la base ne doit jamais bloquer le bot */ }
     return true;
   } catch (erreur) {
     console.error(`⚠️ Écriture ${nom}.json impossible :`, erreur.message);

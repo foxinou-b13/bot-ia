@@ -18,3 +18,5 @@ services:
         sync: false
       - key: GROQ_API_KEY
         sync: false
+      - key: MONGODB_URI      # optionnel : base gratuite Atlas (réglages durables)
+        sync: false
