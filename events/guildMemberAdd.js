@@ -72,7 +72,6 @@ module.exports = {
           : null,
         pseudo: membre.user?.username || 'nouveau membre',
         langue: reglages.bienvenue.langue || 'fr',
-        serveur: guild.name,
       });
       await cible.send({
         content: `<@${membre.id}>`,

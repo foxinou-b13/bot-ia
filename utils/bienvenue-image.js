@@ -2,8 +2,7 @@
  * utils/bienvenue-image.js — génère la carte-image de bienvenue.
  *
  * Fondu du fond choisi par l'admin + avatar du nouveau en rond (anneau blanc)
- * + grand mot BIENVENUE / WELCOME + pseudo, comme les images des outils de
- * créateurs. Tout est dessiné localement (canvas), aucune API externe payante.
+ * + grand mot BIENVENUE / WELCOME + pseudo — rien d'autre sur l'image. Tout est dessiné localement (canvas), aucune API externe payante.
  *
  * En cas de pépin (image injoignable, taille, mémoire) : on renvoie une erreur,
  * et l'événement bascule sur la carte texte — la bienvenue ne rate jamais.
@@ -33,8 +32,8 @@ const TAILLE_MAX_TELECHARGEMENT = 8 * 1024 * 1024;   // 8 Mo max par image sourc
 const DELAI_TELECHARGEMENT = 10000;                  // 10 s
 
 const LIBELLES = {
-  fr: { titre: 'BIENVENUE', sous: 'sur' },
-  en: { titre: 'WELCOME', sous: 'on' },
+  fr: { titre: 'BIENVENUE' },
+  en: { titre: 'WELCOME' },
 };
 
 /** Le texte de l'image dépend de la langue choisie par l'admin (français par défaut). */
@@ -103,7 +102,7 @@ function ajusterTaille(ctx, texte, tailleMax, largeurMax) {
  * Compose l'image finale à partir de tampons déjà chargés.
  * @returns {Promise<Buffer>} PNG
  */
-async function composer({ fondBuffer = null, avatarBuffer = null, pseudo, langue = 'fr', serveur = '' }) {
+async function composer({ fondBuffer = null, avatarBuffer = null, pseudo, langue = 'fr' }) {
   chargerFont();
   const canvas = createCanvas(LARGEUR, HAUTEUR);
   const ctx = canvas.getContext('2d');
@@ -153,26 +152,19 @@ async function composer({ fondBuffer = null, avatarBuffer = null, pseudo, langue
   ctx.beginPath(); ctx.arc(cx, cy, r + 6, 0, Math.PI * 2);
   ctx.lineWidth = 9; ctx.strokeStyle = '#ffffff'; ctx.stroke();
 
-  // 4. textes : grand titre + pseudo (+ petit « sur le serveur »)
+  // 4. textes : grand titre + pseudo (rien d'autre, la carte reste épurée)
   ctx.textAlign = 'center'; ctx.textBaseline = 'alphabetic';
   ctx.shadowColor = 'rgba(0,0,0,0.6)'; ctx.shadowBlur = 18; ctx.shadowOffsetY = 4;
 
   const titre = textes.titre;
   ajusterTaille(ctx, titre, 148, LARGEUR * 0.9);
   ctx.fillStyle = '#ffffff';
-  ctx.fillText(titre, cx, 578);
+  ctx.fillText(titre, cx, 602);
 
   const nom = String(pseudo || 'nouveau membre');
   ajusterTaille(ctx, nom, 60, LARGEUR * 0.78);
   ctx.fillStyle = '#f4f6ff';
-  ctx.fillText(nom, cx, 646);
-
-  if (serveur) {
-    ctx.shadowBlur = 8;
-    ctx.font = "23px 'DejaVu Sans', sans-serif";
-    ctx.fillStyle = 'rgba(244,246,255,0.75)';
-    ctx.fillText(`${textes.sous} ${serveur}`, cx, 692);
-  }
+  ctx.fillText(nom, cx, 674);
 
   ctx.shadowBlur = 0;
   return canvas.toBuffer('image/png');
@@ -182,12 +174,12 @@ async function composer({ fondBuffer = null, avatarBuffer = null, pseudo, langue
  * Fabrique la carte de bienvenue complète (télécharge le fond et l'avatar).
  * @returns {Promise<Buffer>} PNG prêt à envoyer sur Discord
  */
-async function generer({ fondUrl = null, avatarUrl = null, pseudo, langue = 'fr', serveur = '', fetchImpl } = {}) {
+async function generer({ fondUrl = null, avatarUrl = null, pseudo, langue = 'fr', fetchImpl } = {}) {
   const taches = [];
   if (fondUrl) taches.push(chargerImage(fondUrl, fetchImpl).catch(() => null)); else taches.push(Promise.resolve(null));
   if (avatarUrl) taches.push(chargerImage(avatarUrl, fetchImpl).catch(() => null)); else taches.push(Promise.resolve(null));
   const [fondBuffer, avatarBuffer] = await Promise.all(taches);
-  return composer({ fondBuffer, avatarBuffer, pseudo, langue, serveur });
+  return composer({ fondBuffer, avatarBuffer, pseudo, langue });
 }
 
 module.exports = {
