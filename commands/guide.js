@@ -1,6 +1,6 @@
 /**
  * commands/guide.js — les repères publics du serveur (pour TOUS les membres).
- * Règles, support/tickets, accueil : le bot répond « ici » au bon endroit,
+ * Règles, contact du staff, accueil : le bot répond « ici » au bon endroit,
  * et /ask utilise les mêmes infos quand on lui pose la question en langage naturel.
  */
 const { SlashCommandBuilder, EmbedBuilder } = require('discord.js');
@@ -12,13 +12,13 @@ module.exports = {
 
   data: new SlashCommandBuilder()
     .setName('guide')
-    .setDescription('Raccourcis du serveur : règles, support/tickets, accueil'),
+    .setDescription('Raccourcis du serveur : les salons importants (règles, staff, accueil)'),
 
   async executer(interaction) {
     const r = stockage.reglages(interaction.guildId);
     const champs = [];
     if (r.guide.regles) champs.push({ name: '📜 Les règles', value: `À lire ici : <#${r.guide.regles}>` });
-    if (r.guide.support) champs.push({ name: '🛟 Support & tickets', value: `Pour parler au staff ou ouvrir un ticket : <#${r.guide.support}>` });
+    if (r.guide.support) champs.push({ name: '🛟 Contacter le staff', value: `Pour une demande au staff : <#${r.guide.support}>` });
     if (r.bienvenue.salon) champs.push({ name: '👋 Se présenter', value: `C'est dans <#${r.bienvenue.salon}> que ça se passe !` });
 
     if (!champs.length) {

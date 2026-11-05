@@ -30,7 +30,7 @@ const MODULES = {
 
 const SECTIONS = [
   { valeur: 'accueil', label: '👋 Accueil des nouveaux', aide: 'Salon de bienvenue, message, rôle automatique' },
-  { valeur: 'salons', label: '📋 Salons & repères', aide: 'Logs du staff, règles, support/tickets' },
+  { valeur: 'salons', label: '📋 Salons & repères', aide: 'Logs du staff, règles, salon pour contacter le staff' },
   { valeur: 'automod', label: '🛡️ Auto-modération', aide: 'Spam, liens, insultes, majuscules, raid' },
   { valeur: 'sanctions', label: '⚖️ Sanctions automatiques', aide: 'Mute après plusieurs avertissements' },
   { valeur: 'ia', label: '🤖 Intelligence artificielle', aide: 'Activer/couper par salon, personnalité' },
@@ -80,7 +80,7 @@ function panneauPrincipal(guildId, channelId = null, section = null, note = null
       { name: '📋 Salon exempté', value: a.salonExempt ? `<#${a.salonExempt}>` : '_aucun_', inline: true },
       { name: '🗂️ Logs du staff', value: r.logs ? `<#${r.logs}>` : '_non définis_', inline: true },
       { name: '📜 Salon des règles', value: r.guide.regles ? `<#${r.guide.regles}>` : '_non défini_', inline: true },
-      { name: '🛟 Support / tickets', value: r.guide.support ? `<#${r.guide.support}>` : '_non défini_', inline: true },
+      { name: '🛟 Contacter le staff', value: r.guide.support ? `<#${r.guide.support}>` : '_non défini_', inline: true },
       { name: '👋 Bienvenue', value: b.salon ? `<#${b.salon}>` + (b.role ? ` · rôle <@&${b.role}>` : '') : '_coupée_', inline: true },
       { name: '⚖️ Sanction auto', value: a.sanctionAuto ? `${a.seuilAvert || 3} avertis → mute ${a.dureeSanction || 60} min` : '_désactivée_', inline: true },
       { name: '🤖 IA', value: iaR.active === false ? '_coupée partout_' : (iaCoupeeIci ? '🔇 coupée dans ce salon' : '🟢 active'), inline: true },
@@ -106,7 +106,7 @@ function panneauPrincipal(guildId, channelId = null, section = null, note = null
     rows.push(
       selectCanal('cfg:salons:logs', '🗂️ Logs du staff — sanctions, alertes, filtres (privé)'),
       selectCanal('cfg:salons:regles', '📜 Salon des règles du serveur'),
-      selectCanal('cfg:salons:support', '🛟 Salon support ou ouverture des tickets'),
+      selectCanal('cfg:salons:support', '🛟 Salon où contacter le staff (aide, signalements)'),
       rang(
         bouton('cfg:salons:logs-off', 'Retirer les logs', '🧹'),
         bouton('cfg:salons:regles-off', 'Retirer les règles', '🧹'),
@@ -246,7 +246,7 @@ module.exports = {
     if (id === 'cfg:salons:support' && interaction.isChannelSelectMenu()) {
       const salon = interaction.channels.first();
       return maj({ guide: { support: salon ? salon.id : null } },
-        salon ? `✅ Support/tickets : les membres seront orientés vers <#${salon.id}>.` : '✅ Support mis à jour.');
+        salon ? `✅ Contacter le staff : les membres seront orientés vers <#${salon.id}>.` : '✅ Staff mis à jour.');
     }
     if (id === 'cfg:salons:logs-off') return maj({ logs: null }, '🧹 Logs retirés.');
     if (id === 'cfg:salons:regles-off') return maj({ guide: { regles: null } }, '🧹 Salon des règles retiré.');

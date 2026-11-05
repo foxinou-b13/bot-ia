@@ -132,11 +132,11 @@ function repereIA(guildId) {
   const r = reglages(guildId);
   const morceaux = [];
   if (r.guide.regles) morceaux.push(`les règles du serveur se lisent dans <#${r.guide.regles}>`);
-  if (r.guide.support) morceaux.push(`pour contacter le staff ou ouvrir un ticket, c'est dans <#${r.guide.support}>`);
+  if (r.guide.support) morceaux.push(`pour contacter le staff, c'est dans <#${r.guide.support}>`);
   if (r.bienvenue.salon) morceaux.push(`les nouveaux membres sont accueillis dans <#${r.bienvenue.salon}>`);
   if (!morceaux.length) return '';
   return `Repères officiels du serveur (à communiquer poliment et avec le lien exact quand un membre cherche ça) : ${morceaux.join(' ; ')}. `
-    + 'Si on te demande « où sont les règles », « comment ouvrir un ticket », « comment contacter un modo », réponds en une phrase avec le lien concerné. '
+    + 'Si on te demande « où sont les règles », « qui contacter », « comment parler à un modo », réponds en une phrase avec le lien concerné. '
     + 'N\'INVENTE JAMAIS un salon ou un lien qui n\'est pas dans cette liste.';
 }
 
