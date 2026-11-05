@@ -1,7 +1,7 @@
 /**
  * events/guildMemberAdd.js — message de bienvenue + détection de raid.
  */
-const { Events } = require('discord.js');
+const { Events, EmbedBuilder } = require('discord.js');
 const stockage = require('../utils/stockage');
 const journal = require('../utils/journal');
 const { config } = require('../config');
@@ -63,8 +63,15 @@ module.exports = {
     const nombre = guild.memberCount || 0;
     const texte = texteBienvenue(message || 'Bienvenue {membre} sur **{serveur}** !', membre, guild, nombre);
 
+    const carte = new EmbedBuilder()
+      .setColor(0x5865f2)
+      .setTitle(`👋 Bienvenue sur ${guild.name} !`);
+    carte.setDescription(texte);
+    if (nombre) carte.addFields({ name: '👥 Nouvel arrivant', value: `Tu es le **${nombre}ᵉ membre** du serveur.` });
+    if (role) carte.addFields({ name: '🎟️ Accès', value: 'Le rôle du serveur t\'a été donné automatiquement — tu as accès aux salons.', inline: true });
+
     try {
-      await cible.send({ content: texte, allowedMentions: { users: [membre.id] } });
+      await cible.send({ embeds: [carte], allowedMentions: { users: [membre.id] } });
       return true;
     } catch (erreur) {
       console.error('⚠️ Bienvenue non envoyée :', erreur.message);

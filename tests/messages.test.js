@@ -130,10 +130,15 @@ test('bienvenue : message envoyé avec les variables remplacées', async () => {
   membre.guild = guilde;
   await guildMemberAdd.executer(client, membre);
 
-  const texte = salon.messagesEnvoyes[0]?.content || '';
+  const paquet = salon.messagesEnvoyes[0] || {};
+  const carte = paquet.embeds?.[0];
+  assert.ok(carte, 'la bienvenue doit être dans une carte (embed)');
+  const json = carte.toJSON ? carte.toJSON() : carte;
+  const texte = `${json.title || ''} ${json.description || ''}`;
   assert.ok(texte.includes('<@nouveau1>'), texte);
   assert.ok(texte.includes('Otaku Land'), texte);
   assert.ok(texte.includes('42'), texte);
+  assert.ok(!json.footer, 'aucun tag sous la carte');
 });
 
 test('bienvenue désactivée : aucun message', async () => {
