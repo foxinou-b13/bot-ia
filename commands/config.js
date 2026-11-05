@@ -38,7 +38,8 @@ const SECTIONS = [
 
 function sectionCourante(guildId) {
   const s = stockage.reglages(guildId).cfgSection;
-  return SECTIONS.some((x) => x.valeur === s) ? s : SECTIONS[0].valeur;
+  // null tant que rien n'est choisi : le panneau n'affiche ALORS que le sélecteur.
+  return SECTIONS.some((x) => x.valeur === s) ? s : null;
 }
 
 const rang = (...composants) => new ActionRowBuilder().addComponents(...composants);
@@ -69,7 +70,9 @@ function panneauPrincipal(guildId, channelId = null, section = null, note = null
   const actifs = Object.entries(MODULES).filter(([cle]) => a[cle]).map(([, m]) => m.nom);
   const lignes = [];
   if (note) lignes.push(note, '');
-  lignes.push('Choisis une **section** dans le menu ci-dessous — chaque réglage s\'applique instantanément.');
+  lignes.push(sec
+    ? 'Tu es dans la section **'+SECTIONS.find((x) => x.valeur === sec).label+'** — change de section avec le menu du haut, chaque réglage s\'applique instantanément.'
+    : '👇 Choisis d\'abord **ce que tu veux configurer** dans le menu — ses réglages s\'afficheront juste en dessous.');
 
   const embed = new EmbedBuilder()
     .setColor(COULEUR)
@@ -88,6 +91,10 @@ function panneauPrincipal(guildId, channelId = null, section = null, note = null
     );
 
   const rows = [selectSection(sec)];
+
+  if (!sec) {
+    return { embeds: [embed], components: rows };   // petit panneau : le sélecteur, rien d'autre
+  }
 
   if (sec === 'accueil') {
     rows.push(

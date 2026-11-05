@@ -52,7 +52,7 @@ function ecrire(nom, donnees) {
 const REGLAGES_DEFAUT = {
   logs: null,
   guide: { regles: null, support: null },
-  cfgSection: 'modules',
+  cfgSection: null,
   bienvenue: { salon: null, message: null, role: null },
   automod: {
     spam: true,

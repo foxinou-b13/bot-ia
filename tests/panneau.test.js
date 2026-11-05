@@ -50,7 +50,26 @@ test('/config : affiche le sélecteur de sections en première rangée', async (
   const json = paquet.components.map((c) => c.toJSON());
   assert.strictEqual(json[0].components[0].custom_id, 'cfg:section', 'le sélecteur de sections doit être en premier');
   assert.strictEqual(json[0].components[0].options.length, 5, '5 sections attendues');
-  assert.ok(json.length >= 2, 'la section active doit afficher ses réglages');
+  assert.strictEqual(json.length, 1, 'à la première ouverture : le sélecteur seul');
+});
+
+test('première ouverture : PAS les réglages d\'accueil, juste le menu', () => {
+  const G2 = `G-CFG-PUR-${Date.now()}`;
+  const paquet = config.panneauPrincipal(G2, 'C1');
+  const ids = paquet.components.map((r) => r.toJSON().components[0].custom_id);
+  assert.deepStrictEqual(ids, ['cfg:section']);
+  assert.ok(/Choisis/.test(paquet.embeds[0].toJSON().description), 'le texte doit inviter à choisir');
+});
+
+test('après choix d\'une section, les réglages suivent puis se mémorisent', async () => {
+  const G3 = `G-CFG-GARDE-${Date.now()}`;
+  const s1 = menuFactice({ customId: 'cfg:section', values: ['salons'], guildId: G3 });
+  await config.composant(s1);
+  const rendu = s1.journal.find(([t]) => t === 'update')[1];
+  const ids = rendu.components.map((r) => r.toJSON().components[0].custom_id);
+  assert.ok(ids.includes('cfg:salons:regles'), 'les réglages de la section doivent suivre le choix');
+  const rendu2 = config.panneauPrincipal(G3);
+  assert.ok(rendu2.components.length > 1, 'la section mémorisée doit réafficher ses réglages');
 });
 
 test('changer de section : le panneau affiche les bons réglages et se souvient', async () => {
