@@ -61,6 +61,7 @@ const REGLAGES_DEFAUT = {
     salonExempt: null,
   },
   muteRole: null,
+  ia: { active: true, salonBloques: [], consigne: '' },
 };
 
 function tousLesReglages() {
@@ -75,6 +76,7 @@ function reglages(guildId) {
     ...siens,
     bienvenue: { ...REGLAGES_DEFAUT.bienvenue, ...(siens.bienvenue || {}) },
     automod: { ...REGLAGES_DEFAUT.automod, ...(siens.automod || {}) },
+    ia: { ...REGLAGES_DEFAUT.ia, ...(siens.ia || {}), salonBloques: [...((siens.ia || {}).salonBloques || [])] },
   };
 }
 
@@ -86,6 +88,7 @@ function majReglages(guildId, morceau) {
     ...morceau,
     bienvenue: { ...(avant.bienvenue || {}), ...(morceau.bienvenue || {}) },
     automod: { ...(avant.automod || {}), ...(morceau.automod || {}) },
+    ia: { ...(avant.ia || {}), ...(morceau.ia || {}) },
   };
   if (morceau.bienvenue === undefined) tous[guildId].bienvenue = avant.bienvenue || REGLAGES_DEFAUT.bienvenue;
   if (morceau.automod === undefined) tous[guildId].automod = avant.automod || REGLAGES_DEFAUT.automod;
@@ -130,4 +133,13 @@ module.exports = {
   avertissements,
   ajouterAvert,
   retirerAvert,
+  /** Supprime TOUS les avertissements d'un membre (droit à l'effacement). */
+  effacerAvertissements(guildId, userId) {
+    const tous = lire('warns', {});
+    const cle = cleAvert(guildId, userId);
+    const avant = (tous[cle] || []).length;
+    delete tous[cle];
+    ecrire('warns', tous);
+    return avant;
+  },
 };

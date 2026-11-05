@@ -11,7 +11,7 @@ module.exports = {
 
   async executer(client, interaction) {
     // ─── menus déroulants, boutons, sélecteurs ───
-    if (interaction.isStringSelectMenu?.() || interaction.isChannelSelectMenu?.() || interaction.isButton?.()) {
+    if (interaction.isStringSelectMenu?.() || interaction.isChannelSelectMenu?.() || interaction.isButton?.() || interaction.isModalSubmit?.()) {
       for (const commande of client.commands.values()) {
         if (typeof commande.composant !== 'function') continue;
         try {

@@ -1,6 +1,9 @@
 const { SlashCommandBuilder, EmbedBuilder } = require('discord.js');
 const ia = require('../utils/ia');
 const panneaux = require('../utils/panneaux');
+const securite = require('../utils/securite-ia');
+const journal = require('../utils/journal');
+const stockage = require('../utils/stockage');
 
 module.exports = {
   categorie: 'ia',
@@ -19,6 +22,22 @@ module.exports = {
       return panneaux.oups(interaction, '❓ Question vide', 'Écris une vraie question et je m\'en occupe.');
     }
 
+    // ─── sécurité pro : on filtre AVANT d'appeler l'IA (réglages + salon + sujet) ───
+    const acces = securite.verifierAcces(interaction.guildId, interaction.channelId, question);
+    if (!acces.ok) {
+      if (acces.bloc) {
+        await journal.journaliser(interaction.guild, {
+          type: 'auto',
+          titre: '🛡️ Question IA bloquée par le filtre',
+          auteur: interaction.user.tag,
+          cible: `#${interaction.channel?.name || 'salon'}`,
+          raison: acces.bloc,
+          details: question.slice(0, 180),
+        });
+      }
+      return panneaux.oups(interaction, '🛡️ Je ne peux pas répondre là-dessus', acces.raison);
+    }
+
     const limite = ia.tropRapide(interaction.user.id);
     if (limite.bloque) {
       return panneaux.oups(interaction, '⏳ Doucement',
@@ -29,16 +48,33 @@ module.exports = {
 
     const debut = Date.now();
     try {
-      const { texte, fournisseur } = await ia.demander({
+      let { texte, fournisseur } = await ia.demander({
         systeme: ia.consigneSysteme({
           serveur: interaction.guild?.name,
           pseudo: interaction.member?.displayName || interaction.user.username,
+          consigneServeur: (stockage.reglages(interaction.guildId).ia || {}).consigne,
         }),
         messages: [
           ...ia.memoire(interaction.guildId, interaction.channelId),
           { role: 'user', contenu: question },
         ],
       });
+
+      // ─── filtrage SORTANT : si le modèle dérape, rien ne paraît ───
+      const propre = securite.filtrerSortie(texte);
+      if (propre === null) {
+        await journal.journaliser(interaction.guild, {
+          type: 'auto',
+          titre: '🛡️ Réponse IA bloquée avant publication',
+          auteur: `${fournisseur} (${interaction.user.tag})`,
+          cible: `#${interaction.channel?.name || 'salon'}`,
+          raison: 'contenu hors limites',
+        });
+        return interaction.editReply({
+          embeds: [panneaux.attention('🛡️ Réponse retenue', "Le modèle a produit quelque chose que je ne peux pas publier ici. Reformule ta question et je retente.")],
+        }).catch(() => null);
+      }
+      texte = propre;
 
       ia.memoriser(interaction.guildId, interaction.channelId, 'user', question);
       ia.memoriser(interaction.guildId, interaction.channelId, 'assistant', texte);
@@ -50,7 +86,7 @@ module.exports = {
       const carte = new EmbedBuilder()
         .setColor(panneaux.COULEUR)
         .setDescription(morceaux[0])
-        .setFooter({ text: `${quoi} • réponse en ${secondes} s` })
+        .setFooter({ text: `${quoi} • réponse en ${secondes} s • contenu généré par une IA` })
         .setTimestamp();
       await interaction.editReply({ embeds: [carte] }).catch(() => null);
       for (const suite of morceaux.slice(1)) {

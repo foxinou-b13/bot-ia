@@ -11,7 +11,7 @@
 const {
   SlashCommandBuilder, PermissionsBitField, ActionRowBuilder,
   StringSelectMenuBuilder, ChannelSelectMenuBuilder, ButtonBuilder, ButtonStyle,
-  ChannelType, EmbedBuilder,
+  ChannelType, EmbedBuilder, ModalBuilder, TextInputBuilder, TextInputStyle,
 } = require('discord.js');
 const perms = require('../utils/permissions');
 const panneaux = require('../utils/panneaux');
@@ -30,9 +30,11 @@ const MODULES = {
 };
 
 // ─── écran principal ───
-function panneauPrincipal(guildId) {
+function panneauPrincipal(guildId, channelId = null) {
   const r = stockage.reglages(guildId);
   const a = r.automod;
+  const iaR = r.ia || {};
+  const iaIciCoupee = Boolean(channelId && (iaR.salonBloques || []).includes(channelId));
 
   const actifs = Object.entries(MODULES)
     .filter(([cle]) => a[cle])
@@ -56,6 +58,12 @@ function panneauPrincipal(guildId) {
           : '_désactivée_',
         inline: true },
       { name: '👋 Bienvenue', value: r.bienvenue.salon ? `<#${r.bienvenue.salon}>` : '_désactivée_', inline: true },
+      { name: '🤖 IA dans ce salon',
+        value: iaR.active === false ? '_IA éteinte partout_' : (iaIciCoupee ? '🔇 **coupée ici**' : '🟢 **active ici**'),
+        inline: true },
+      { name: '🎭 Personnalité de l\'IA',
+        value: iaR.consigne ? `> ${String(iaR.consigne).slice(0, 120)}${String(iaR.consigne).length > 120 ? '…' : ''}` : '_réponses standard (modifiable via le bouton 🎭)_',
+        inline: false },
     )
     .setFooter({ text: 'Chaque serveur a ses propres réglages' });
 
@@ -97,8 +105,13 @@ function panneauPrincipal(guildId) {
   );
 
   const boutons = new ActionRowBuilder().addComponents(
+    new ButtonBuilder()
+      .setCustomId('cfg:ia-ici')
+      .setLabel(iaIciCoupee ? 'Réactiver l\'IA ici' : 'Couper l\'IA ici')
+      .setStyle(iaIciCoupee ? ButtonStyle.Success : ButtonStyle.Secondary)
+      .setEmoji(iaIciCoupee ? '🟢' : '🔇'),
+    new ButtonBuilder().setCustomId('cfg:perso').setLabel('Personnalité de l\'IA').setStyle(ButtonStyle.Primary).setEmoji('🎭'),
     new ButtonBuilder().setCustomId('cfg:logs-off').setLabel('Retirer les logs').setStyle(ButtonStyle.Secondary).setEmoji('🧹'),
-    new ButtonBuilder().setCustomId('cfg:exempt-off').setLabel('Retirer l\'exemption').setStyle(ButtonStyle.Secondary).setEmoji('🔕'),
     new ButtonBuilder().setCustomId('cfg:refresh').setLabel('Rafraîchir').setStyle(ButtonStyle.Primary).setEmoji('🔄'),
   );
 
@@ -118,7 +131,7 @@ module.exports = {
     const refus = perms.verifier(interaction, PermissionsBitField.Flags.ManageGuild);
     if (refus) return panneaux.oups(interaction, '🚫 Action impossible', refus);
 
-    const paquet = panneauPrincipal(interaction.guildId);
+    const paquet = panneauPrincipal(interaction.guildId, interaction.channelId);
     return interaction.reply({ ...paquet, ephemeral: true }).catch(() => null);
   },
 
@@ -168,6 +181,46 @@ module.exports = {
         });
         message = `⚖️ Activé : **${seuil} avertissement(s) → mute ${duree} min**.`;
       }
+    }
+
+    if (id === 'cfg:ia-ici') {
+      const r = stockage.reglages(interaction.guildId).ia || {};
+      const bloques = new Set(r.salonBloques || []);
+      let etat;
+      if (bloques.has(interaction.channelId)) { bloques.delete(interaction.channelId); etat = '🟢 IA **réactivée** dans ce salon.'; }
+      else { bloques.add(interaction.channelId); etat = '🔇 IA **coupée** dans ce salon.'; }
+      stockage.majReglages(interaction.guildId, { ia: { salonBloques: [...bloques] } });
+      await interaction.update(panneauPrincipal(interaction.guildId, interaction.channelId)).catch(() => null);
+      await interaction.followUp({ content: etat, ephemeral: true }).catch(() => null);
+      return true;
+    }
+
+    if (id === 'cfg:perso') {
+      const actuelle = (stockage.reglages(interaction.guildId).ia || {}).consigne || '';
+      const modal = new ModalBuilder().setCustomId('cfg:perso-modal').setTitle('🎭 Personnalité de l\'IA');
+      const champ = new TextInputBuilder()
+        .setCustomId('consigne')
+        .setLabel('Comment doit se comporter l\'IA ?')
+        .setPlaceholder('Ex. : ton pirate, 2 phrases max, avec des exemples')
+        .setStyle(TextInputStyle.Paragraph)
+        .setMaxLength(500)
+        .setRequired(false)
+        .setValue(actuelle.slice(0, 500));
+      modal.addComponents(new ActionRowBuilder().addComponents(champ));
+      await interaction.showModal(modal).catch(() => null);
+      return true;
+    }
+
+    if (id === 'cfg:perso-modal') {
+      const valeur = String(interaction.fields?.getTextInputValue('consigne') || '').trim();
+      stockage.majReglages(interaction.guildId, { ia: { consigne: valeur } });
+      await interaction.reply({
+        embeds: [valeur
+          ? panneaux.succes('🎭 Personnalité enregistrée', `L'IA répondra désormais dans ce caractère (dans la limite des règles de sécurité) :\n> ${valeur.slice(0, 300)}`)
+          : panneaux.info('🎭 Personnalité effacée', "L'IA revient à ses réponses standard.")],
+        ephemeral: true,
+      }).catch(() => null);
+      return true;
     }
 
     if (id === 'cfg:logs-off') {

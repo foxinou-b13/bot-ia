@@ -9,6 +9,14 @@ Deux métiers :
 
 ---
 
+## Conformité & sécurité IA
+
+- Filtrage entrant/sortant des sujets interdits (adulte, mineurs, piratage) avant et après l'appel au modèle.
+- Mention « contenu généré par une IA » sur chaque réponse ; refus poli sans appel réseau quand c'est bloqué.
+- Audit des blocages dans le salon de logs (commande `/logs`).
+- `/donnees` (droit à l'effacement) et `/confidentialite` (transparence) pour les membres.
+- Politique complète : [PRIVACY.md](PRIVACY.md).
+
 ## 1. Ce dont tu as besoin
 
 | Élément | Où le trouver | Prix |

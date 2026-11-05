@@ -8,6 +8,7 @@ const automod = require('../utils/automod');
 const stockage = require('../utils/stockage');
 const journal = require('../utils/journal');
 const ia = require('../utils/ia');
+const securite = require('../utils/securite-ia');
 const panneaux = require('../utils/panneaux');
 
 const historique = new Map();     // `${guildId}:${userId}` → [horodatages]
@@ -111,6 +112,26 @@ module.exports = {
     }
 
     const question = message.content.replace(/<@!?\d+>/g, '').trim();
+
+    // ─── sécurité pro : filtre avant appel IA (réglages + salon + sujet) ───
+    const acces = securite.verifierAcces(message.guild.id, message.channel.id, question);
+    if (!acces.ok) {
+      if (acces.bloc) {
+        await journal.journaliser(message.guild, {
+          type: 'auto',
+          titre: '🛡️ Question IA bloquée par le filtre',
+          auteur: message.author.tag,
+          cible: `#${message.channel.name}`,
+          raison: acces.bloc,
+          details: question.slice(0, 180),
+        });
+      }
+      return message.reply({
+        embeds: [panneaux.attention('🛡️ Je ne peux pas répondre là-dessus', acces.raison)],
+        allowedMentions: { repliedUser: false },
+      }).catch(() => null);
+    }
+
     const limite = ia.tropRapide(message.author.id);
     if (limite.bloque) {
       return message.reply({
@@ -125,10 +146,11 @@ module.exports = {
 
     const debut = Date.now();
     try {
-      const { texte, fournisseur } = await ia.demander({
+      let { texte, fournisseur } = await ia.demander({
         systeme: ia.consigneSysteme({
           serveur: message.guild.name,
           pseudo: message.member?.displayName || message.author.username,
+          consigneServeur: (stockage.reglages(message.guild.id).ia || {}).consigne,
         }),
         messages: [
           ...ia.memoire(message.guild.id, message.channel.id),
@@ -139,6 +161,20 @@ module.exports = {
       ia.memoriser(message.guild.id, message.channel.id, 'user', question);
       ia.memoriser(message.guild.id, message.channel.id, 'assistant', texte);
 
+      // ─── filtrage SORTANT ───
+      const propre = securite.filtrerSortie(texte);
+      if (propre === null) {
+        await journal.journaliser(message.guild, {
+          type: 'auto',
+          titre: '🛡️ Réponse IA bloquée avant publication',
+          auteur: `${fournisseur} (${message.author.tag})`,
+          cible: `#${message.channel.name}`,
+          raison: 'contenu hors limites',
+        });
+        return null;
+      }
+      texte = propre;
+
       const secondes = ((Date.now() - debut) / 1000).toFixed(1);
       const quoi = fournisseur === 'groq' ? '⚡ Groq' : '🔷 Gemini';
       const morceaux = ia.decouper(texte);
@@ -146,7 +182,7 @@ module.exports = {
       const carte = new (require('discord.js').EmbedBuilder)()
         .setColor(panneaux.COULEUR)
         .setDescription(morceaux[0])
-        .setFooter({ text: `${quoi} • réponse en ${secondes} s` })
+        .setFooter({ text: `${quoi} • réponse en ${secondes} s • contenu généré par une IA` })
         .setTimestamp();
       await message.reply({ embeds: [carte], allowedMentions: { repliedUser: false } }).catch(() => null);
       for (const suite of morceaux.slice(1)) {

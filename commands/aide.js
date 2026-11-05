@@ -26,8 +26,12 @@ module.exports = {
       '`/clear` `/slowmode` `/lock` `/unlock` `/role` — gestion du salon',
       '',
       '**⚙️ Réglages**',
-      '`/config` — ⭐ LE PANNEAU : tout se règle avec des menus déroulants',
+      '`/config` — ⭐ LE PANNEAU : menus déroulants, boutons, personnalité de l\'IA (zéro saisie)',
       '`/automod` `/logs` `/bienvenue` — les mêmes réglages, en commande directe',
+      '',
+      '**🔒 Tes données**',
+      '`/donnees` — voir et effacer ce que le bot garde sur toi',
+      '`/confidentialite` — ce qui est stocké et ce qui part vers l\'IA',
       '',
       `_Cerveau : ${cerveau} · version ${config.version}_`,
     ].join('\n');

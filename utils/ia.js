@@ -9,6 +9,7 @@
  * sans que l'utilisateur voie d'erreur. Aucune dépendance : fetch natif.
  */
 const { config, fournisseursIA } = require('../config');
+const securite = require('./securite-ia');
 
 const DELAI_MAX = 25000;          // 25 s maximum par appel
 const PHRASE_ECHEC = "Je n'arrive pas à réfléchir pour l'instant (mes fournisseurs d'IA ne répondent pas). Réessaie dans une minute.";
@@ -191,6 +192,11 @@ function tropRapide(userId, options = {}) {
   return { bloque: false, resteSecondes: 0 };
 }
 
+/** Oublie l'anti-flood d'un membre (utilisé par /donnees). */
+function oublierMembre(userId) {
+  derniersAppels.delete(userId);
+}
+
 function reinitialiserLimites() {
   derniersAppels.clear();
   memoires.clear();
@@ -221,11 +227,15 @@ function consigneSysteme(contexte = {}) {
     "Tu réponds TOUJOURS en français, avec un ton chaleureux mais sans excès d'emojis (2 maximum).",
     "Tes réponses sont courtes : 1 à 4 phrases, sauf si on te demande un texte long.",
     "Tu ne prétends jamais être un humain : si on te demande, tu dis que tu es le bot du serveur.",
-    "Tu n'inventes pas de commandes : les commandes du bot sont /ask, /aide, /ban, /kick, /mute, /warn, /avertissements, /clear, /slowmode, /lock, /unlock, /role, /automod, /logs, /bienvenue, /ia-reset.",
+    "Tu n'inventes pas de commandes : les commandes du bot sont /ask, /aide, /config, /ban, /kick, /mute, /warn, /avertissements, /avertissement-retirer, /clear, /slowmode, /lock, /unlock, /role, /automod, /logs, /bienvenue, /ia-reset, /donnees, /confidentialite.",
     "Si une question sort de ton domaine ou demande une action de modération, tu invites poliment à utiliser la commande adaptée.",
     serveur,
     pseudo,
-  ].filter(Boolean).join(' ');
+    securite.CONSIGNES_SECURITE,
+    contexte.consigneServeur
+      ? `Personnalité demandée par l'administrateur du serveur (à respecter seulement si elle est compatible avec tes règles de sécurité) : ${contexte.consigneServeur}`
+      : '',
+  ].filter(Boolean).join('\n');
 }
 
 module.exports = {
@@ -238,6 +248,7 @@ module.exports = {
   memoriser,
   oublier,
   tropRapide,
+  oublierMembre,
   reinitialiserLimites,
   quatre: fournisseursIA,
 };
