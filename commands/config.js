@@ -447,20 +447,12 @@ module.exports = {
       try {
         await interaction.showModal(modal);
         return true;
-      } catch {
-        // Vieux client sans sélecteur dans les formulaires → repli MP, puis repli URL.
-        const choixFond = require('../utils/choix-fond');
-        try {
-          choixFond.demander(interaction);
-          await interaction.user.send({
-            content: '🖼️ Le sélecteur d\'image n\'est pas dispo sur ton app — envoie-moi l\'image ici '
-              + '(bouton 📎 → galerie), je m\'occupe du reste. ⏱️ 10 minutes.',
-          });
-          return montrer('📨 Je t\'ai écrit en message privé : envoie l\'image dedans.');
-        } catch {
-          return montrer('⚠️ Impossible d\'ouvrir le sélecteur (et tes MP sont fermés) : '
-            + 'utilise « 🔗 Adresse d\'image » juste en dessous, ou la commande /image-bienvenue.');
-        }
+      } catch (erreur) {
+        // Plus JAMAIS de message privé : si la fenêtre ne s'ouvre pas, on le dit sur la carte.
+        console.warn('⚠️ Modale du sélecteur d\'image impossible :', erreur.message);
+        return montrer('⚠️ Ton application Discord n\'arrive pas à ouvrir ce sélecteur — '
+          + 'mets-la à jour, puis retouche « 📱 Choisir une image ». '
+          + 'En attendant : « 🔗 Adresse d\'image » ou la commande /image-bienvenue.');
       }
     }
     if (id === 'cfg:accueil:fond-pj-modal') {

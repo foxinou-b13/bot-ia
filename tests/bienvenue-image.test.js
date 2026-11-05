@@ -257,17 +257,17 @@ test('bouton 📱 : le bot ouvre LE sélecteur natif de Discord (modale avec cha
   assert.strictEqual(champ.max_values, 1);
 });
 
-test('bouton 📱 : si le client est trop vieux pour la modale, repli MP', async () => {
+test('bouton 📱 : si le client est trop vieux, on l\'explique sur la carte — JAMAIS de MP', async () => {
   const inter = selecteur('cfg:accueil:fond-pj', {
     isButton: () => true,
     async showModal() { throw new Error('client pas à jour'); },
   });
-  let envoye = null;
-  inter.user.send = async (paquet) => { envoye = paquet; };
+  let mpTente = false;
+  inter.user.send = async () => { mpTente = true; };
   await config.composant(inter);
-  assert.ok(envoye && /📎/.test(envoye.content), 'le repli doit écrire en MP');
-  assert.ok(choixFond.chercherEnAttente(inter.user.id), 'l\'attente MP doit être prise pour le repli');
-  choixFond.__enAttente.delete(inter.user.id);
+  assert.strictEqual(mpTente, false, 'le bot ne doit plus écrire en MP');
+  const note = inter.journal.find(([t]) => t === 'update')[1].embeds[0].toJSON().description;
+  assert.ok(/mets-la à jour/.test(note), note);
 });
 
 test('modale soumise avec une image : vérifiée, enregistrée, aperçu renvoyé', async () => {
