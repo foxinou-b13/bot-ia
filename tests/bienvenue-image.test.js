@@ -134,5 +134,103 @@ test('thème de fond : rendu différent du dégradé par défaut', async () => {
   assert.ok(!a.equals(b2), 'le thème ne change rien au rendu');
 });
 
+// ─── optimisation CDN + recadrage automatique ───
+test('optimiserUrl : le CDN Discord reçoit un recadrage 1280×720 « cover »', () => {
+  const u = img.optimiserUrl('https://cdn.discordapp.com/attachments/1/2/photo.png');
+  assert.ok(u.includes('width=1280') && u.includes('height=720') && u.includes('resize=cover'), u);
+});
+test('optimiserUrl : les autres hébergeurs ne sont pas touchés', () => {
+  assert.strictEqual(img.optimiserUrl('https://exemple.com/fond.png'), 'https://exemple.com/fond.png');
+  assert.strictEqual(img.optimiserUrl('https://cdn.discordapp.com/x.png?deja=1'), 'https://cdn.discordapp.com/x.png?deja=1');
+  assert.strictEqual(img.optimiserUrl(''), '');
+});
+
+test('photo de téléphone verticale (400×3000) → carte recadrée pile 1280×720', async () => {
+  const { createCanvas } = require('@napi-rs/canvas');
+  const c = createCanvas(400, 3000); const x = c.getContext('2d');
+  x.fillStyle = '#3c9'; x.fillRect(0, 0, 400, 3000);
+  const png = await img.composer({ fondBuffer: c.toBuffer('image/png'), pseudo: 'Nina' });
+  // en-tête PNG : largeur à l'octet 16, hauteur à l'octet 20 (grand boutiste)
+  assert.strictEqual(png.readUInt32BE(16), 1280);
+  assert.strictEqual(png.readUInt32BE(20), 720);
+});
+
+test('image minuscule (100×80) → agrandie proprement sans crash', async () => {
+  const { createCanvas } = require('@napi-rs/canvas');
+  const c = createCanvas(100, 80); const x = c.getContext('2d');
+  x.fillStyle = '#c36'; x.fillRect(0, 0, 100, 80);
+  const png = await img.composer({ fondBuffer: c.toBuffer('image/png'), pseudo: 'Zoé' });
+  assert.strictEqual(png.readUInt32BE(16), 1280);
+});
+
+// ─── la commande /image-bienvenue (joindre une image, pas d'URL) ───
+const cmdFond = require('../commands/image-bienvenue');
+function interFond(att, guildId) {
+  return {
+    guildId: guildId || 'G-FOND-CMD',
+    user: { id: 'u', username: 'Admin' },
+    member: membreMock({ id: 'admin1', tag: 'Admin', permissions: ['ManageGuild'] }),
+    options: { getAttachment: () => att },
+    inGuild: () => true,
+    replied: false, deferred: false, journal: [],
+    async reply(p) { this.journal.push(['reply', p]); this.replied = true; return {}; },
+    async followUp(p) { this.journal.push(['followUp', p]); return {}; },
+  };
+}
+function attFactice(surcharges = {}) {
+  return Object.assign({ name: 'photo.png', contentType: 'image/png', size: 400000, url: 'https://cdn.discordapp.com/attachments/1/2/photo.png' }, surcharges);
+}
+
+test('/image-bienvenue : accepte l\'image, l\'enregistre et renvoie un vrai aperçu PNG', async () => {
+  const original = img.chargerImage;
+  let urlDemandee = null;
+  img.chargerImage = async (u) => {
+    urlDemandee = u;
+    const { createCanvas } = require('@napi-rs/canvas');
+    const c = createCanvas(300, 900); const x = c.getContext('2d');
+    x.fillStyle = '#0af'; x.fillRect(0, 0, 300, 900);
+    return c.toBuffer('image/png');
+  };
+  try {
+    const inter = interFond(attFactice(), 'G-FOND-OK');
+    await cmdFond.executer(inter);
+    assert.strictEqual(stockage.reglages('G-FOND-OK').bienvenue.fond, 'https://cdn.discordapp.com/attachments/1/2/photo.png');
+    const paquet = inter.journal[0][1];
+    assert.ok(paquet.ephemeral, 'la réponse doit être privée');
+    assert.ok(paquet.files?.length, 'aucun aperçu joint');
+    assert.ok(paquet.files[0].attachment[0] === 0x89, 'l\'aperçu n\'est pas un PNG');
+    assert.ok(urlDemandee.includes('resize=cover'), 'le téléchargement ne passe pas par le recadrage CDN');
+  } finally { img.chargerImage = original; }
+});
+
+test('/image-bienvenue : un PDF est refusé avec une phrase claire', async () => {
+  const inter = interFond(attFactice({ name: 'cours.pdf', contentType: 'application/pdf' }), 'G-FOND-PDF');
+  await cmdFond.executer(inter);
+  const t = JSON.stringify(inter.journal[0][1].embeds[0].toJSON());
+  assert.ok(/pas une image/.test(t), t);
+});
+
+test('/image-bienvenue : 9 Mo → refusé « trop lourde »', async () => {
+  const inter = interFond(attFactice({ size: 9 * 1024 * 1024 }), 'G-FOND-LOURD');
+  await cmdFond.executer(inter);
+  assert.ok(/trop lourde/.test(JSON.stringify(inter.journal[0][1])), 'message de refus manquant');
+});
+
+test('/image-bienvenue : fichier illisible → refus propre, rien d\'enregistré', async () => {
+  const original = img.chargerImage;
+  img.chargerImage = async () => Buffer.from('ceci n\'est pas une image');
+  try {
+    const inter = interFond(attFactice(), 'G-FOND-CASSE');
+    await cmdFond.executer(inter);
+    assert.ok(/lire ce fichier|Impossible/.test(JSON.stringify(inter.journal[0][1])), 'pas de message d\'erreur clair');
+    assert.strictEqual(stockage.reglages('G-FOND-CASSE').bienvenue.fond, null);
+  } finally { img.chargerImage = original; }
+});
+
+test('toutes les commandes sont chargées, y compris la nouvelle', () => {
+  const { chargerCommandes } = require('../utils/commandes');
+  assert.ok(chargerCommandes().commandes.has('image-bienvenue'), 'commande non enregistrée');
+});
+
 module.exports = { nom: 'bienvenue-image', cas };
 if (require.main === module) require('./executeur')(module.exports);

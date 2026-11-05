@@ -57,6 +57,29 @@ function validerUrlFond(url) {
   }
 }
 
+/**
+ * Les images jointes sur Discord peuvent être recadrées/compactées PAR le CDN
+ * avant même le téléchargement (une photo de téléphone de 5 Mo devient un
+ * 1280×720 net). Pour les autres hébergeurs, on garde le recadrage local.
+ */
+/** Hostnames des CDN Discord (images recadrables en ligne par leur proxy). */
+const CDN_DISCORD = /^(cdn\.discordapp\.com|media\.discordapp\.net|cdn\.discordapp\.net|images\.discordapp\.com)$/;
+
+function optimiserUrl(url) {
+  const brut = String(url || '');
+  try {
+    const u = new URL(brut);
+    if (CDN_DISCORD.test(u.hostname) && !u.search) {
+      u.searchParams.set('width', String(LARGEUR));
+      u.searchParams.set('height', String(HAUTEUR));
+      u.searchParams.set('resize', 'cover');   // recadrage intelligent côté Discord
+      u.searchParams.set('quality', '85');
+      return u.toString();
+    }
+  } catch { /* URL simple → on ne touche à rien */ }
+  return brut;
+}
+
 /** Télécharge une image avec limite de taille et de durée. */
 async function chargerImage(url, fetchImpl) {
   const f = fetchImpl || fetch;
@@ -187,7 +210,8 @@ async function composer({ fondBuffer = null, avatarBuffer = null, pseudo, langue
  */
 async function generer({ fondUrl = null, avatarUrl = null, pseudo, langue = 'fr', theme = null, fetchImpl } = {}) {
   const taches = [];
-  if (fondUrl) taches.push(chargerImage(fondUrl, fetchImpl).catch(() => null)); else taches.push(Promise.resolve(null));
+  if (fondUrl) taches.push(chargerImage(optimiserUrl(fondUrl), fetchImpl).catch(() => chargerImage(fondUrl, fetchImpl).catch(() => null)));
+  else taches.push(Promise.resolve(null));
   if (avatarUrl) taches.push(chargerImage(avatarUrl, fetchImpl).catch(() => null)); else taches.push(Promise.resolve(null));
   const [fondBuffer, avatarBuffer] = await Promise.all(taches);
   return composer({ fondBuffer, avatarBuffer, pseudo, langue, theme });
@@ -195,6 +219,6 @@ async function generer({ fondUrl = null, avatarUrl = null, pseudo, langue = 'fr'
 
 module.exports = {
   generer, composer, construireTextes, validerUrlFond, chargerImage,
-  THEMES, NOMS_THEMES,
+  THEMES, NOMS_THEMES, optimiserUrl,
   LARGEUR, HAUTEUR,
 };

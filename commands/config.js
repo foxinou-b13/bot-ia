@@ -56,7 +56,7 @@ const RUBRIQUES = {
       },
       fond: {
         label: '🖼️ Image de fond de la carte',
-        desc: 'Le décor derrière la photo du nouveau.\n• Choisis un **theme maison** dans le menu ;\n• ou « 🖼️ Image perso » pour utiliser TA image (une adresse http/https, sans texte dessus de préférence).\nUne adresse personnalisée remplace le thème ; vide = thème dégradé Otaku.',
+        desc: 'Le décor derrière la photo du nouveau.\n• Un **fond « maison »** : choisis-le dans le menu ci-dessous ;\n• **TA propre image** (photo du téléphone, dessin…) : sur mobile comme sur PC, tape **/image-bienvenue** et JOINS l\'image — pas d\'URL à copier. Le bot la recadre tout seul au bon format (1280×720) quel que soit son taille ou sa forme, et t\'envoie un aperçu.\nLe bouton « 🔗 Adresse d\'image » reste utile si tu préfères coller un lien direct.',
       },
       message: {
         label: '✏️ Message d\'accroche',
@@ -264,7 +264,7 @@ function carteReglage(G, sec, cle, channelId, note = null) {
         .addOptions(Object.entries(bienvenueImage.THEMES || { defaut: { nom: 'Dégradé Otaku' } }).map(([cle2, t]) => ({
           label: t.nom, value: cle2, default: !b.fond && (b.fondTheme || 'defaut') === cle2,
         })))),
-      rang(bouton('cfg:accueil:fond-url', 'Image perso (URL)', '🖼️', ButtonStyle.Primary),
+      rang(bouton('cfg:accueil:fond-url', 'Adresse d\'image (URL)', '🔗', ButtonStyle.Primary),
         bouton('cfg:accueil:fond-off', 'Revenir au thème', '🧹')),
     );
   } else if (sec === 'accueil' && cle === 'message') {
