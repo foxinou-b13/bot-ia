@@ -246,15 +246,75 @@ test('la carte du fond propose le bouton 📱 (vrai bouton, plus de lien externe
 
 const choixFond = require('../utils/choix-fond');
 
-test('bouton 📱 : le bot envoie un MP et met l\'admin en attente d\'image', async () => {
-  const inter = selecteur('cfg:accueil:fond-pj', { isButton: () => true });
-  let envoye = null;
-  inter.user.send = async (p) => { envoye = p; };
+test('bouton 📱 : le bot ouvre LE sélecteur natif de Discord (modale avec champ fichier)', async () => {
+  const inter = selecteur('cfg:accueil:fond-pj', { isButton: () => true, async showModal(m) { this.modale = m; } });
   await config.composant(inter);
-  assert.ok(envoye && /galerie/.test(envoye.content), 'le MP doit expliquer le 📎 galerie');
-  assert.ok(choixFond.chercherEnAttente('u'), 'l\'attente doit être enregistrée');
-  const note = inter.journal.find(([t]) => t === 'update')[1].embeds[0].toJSON().description;
-  assert.ok(/message privé/.test(note), note);
+  const brut = inter.modale.toJSON();
+  assert.strictEqual(brut.title, 'Choisir une image');
+  const champ = brut.components[0].components[0];
+  assert.strictEqual(champ.type, 19, 'type 19 = champ « ajouter des fichiers »');
+  assert.deepStrictEqual(champ.file_types, ['image'], 'seules des images doivent être proposées');
+  assert.strictEqual(champ.max_values, 1);
+});
+
+test('bouton 📱 : si le client est trop vieux pour la modale, repli MP', async () => {
+  const inter = selecteur('cfg:accueil:fond-pj', {
+    isButton: () => true,
+    async showModal() { throw new Error('client pas à jour'); },
+  });
+  let envoye = null;
+  inter.user.send = async (paquet) => { envoye = paquet; };
+  await config.composant(inter);
+  assert.ok(envoye && /📎/.test(envoye.content), 'le repli doit écrire en MP');
+  assert.ok(choixFond.chercherEnAttente(inter.user.id), 'l\'attente MP doit être prise pour le repli');
+  choixFond.__enAttente.delete(inter.user.id);
+});
+
+test('modale soumise avec une image : vérifiée, enregistrée, aperçu renvoyé', async () => {
+  const G2 = 'G-MODAL-OK';
+  stockage.majReglages(G2, { bienvenue: { langue: 'en' } });
+  const original = img.chargerImage;
+  img.chargerImage = async () => {
+    const { createCanvas } = require('@napi-rs/canvas');
+    const c = createCanvas(900, 500); const x = c.getContext('2d');
+    x.fillStyle = '#4fc3d9'; x.fillRect(0, 0, 900, 500);
+    return c.toBuffer('image/png');
+  };
+  try {
+    const inter = selecteur('cfg:accueil:fond-pj-modal', {
+      isModalSubmit: () => true, isStringSelectMenu: () => false,
+      fields: { getFileUpload: () => ({ first: () => ({ url: 'https://cdn.discordapp.com/attachments/7/7/mono.jpg', size: 30000 }) }) },
+    });
+    inter.user = { id: 'u', username: 'Foxinou' };
+    inter.guildId = G2;
+    await config.composant(inter);
+    assert.strictEqual(stockage.reglages(G2).bienvenue.fond, 'https://cdn.discordapp.com/attachments/7/7/mono.jpg');
+    const paquet = inter.journal.find(([t]) => t === 'reply')[1];
+    assert.ok(paquet.ephemeral, 'la réponse doit être privée');
+    assert.ok(paquet.files?.[0]?.attachment?.[0] === 0x89, 'aperçu PNG attendu');
+    assert.ok(/WELCOME|aperçu/i.test(JSON.stringify(paquet.embeds[0])), 'l\'aperçu doit suivre la langue EN');
+  } finally { img.chargerImage = original; }
+});
+
+test('modale soumise sans image ou avec une image énorme : réponses claires, rien d\'enregistré', async () => {
+  const G3 = 'G-MODAL-KO';
+  const vide = selecteur('cfg:accueil:fond-pj-modal', {
+    isModalSubmit: () => true, isStringSelectMenu: () => false,
+    fields: { getFileUpload: () => null },
+  });
+  vide.guildId = G3;
+  await config.composant(vide);
+  assert.ok(/Aucune image/.test(JSON.stringify(vide.journal)), JSON.stringify(vide.journal));
+  assert.strictEqual(stockage.reglages(G3).bienvenue.fond, null);
+
+  const lourde = selecteur('cfg:accueil:fond-pj-modal', {
+    isModalSubmit: () => true, isStringSelectMenu: () => false,
+    fields: { getFileUpload: () => ({ first: () => ({ url: 'https://x/y.png', size: 30 * 1024 * 1024 }) }) },
+  });
+  lourde.guildId = G3;
+  await config.composant(lourde);
+  assert.ok(/8 Mo/.test(JSON.stringify(lourde.journal)));
+  assert.strictEqual(stockage.reglages(G3).bienvenue.fond, null);
 });
 
 test('MP avec une image : vérifiée, enregistrée, aperçu renvoyé, attente levée', async () => {

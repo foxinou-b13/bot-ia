@@ -14,7 +14,7 @@ const {
   SlashCommandBuilder, PermissionsBitField, ActionRowBuilder,
   StringSelectMenuBuilder, ChannelSelectMenuBuilder, RoleSelectMenuBuilder,
   ButtonBuilder, ButtonStyle, ChannelType, EmbedBuilder,
-  ModalBuilder, TextInputBuilder, TextInputStyle,
+  ModalBuilder, TextInputBuilder, TextInputStyle, FileUploadBuilder,
 } = require('discord.js');
 const perms = require('../utils/permissions');
 const panneaux = require('../utils/panneaux');
@@ -65,7 +65,7 @@ const RUBRIQUES = {
       },
       fond: {
         label: '🖼️ Image de fond de la carte',
-        desc: 'Le décor derrière la photo du nouveau.\n• **Rien à faire par défaut** : le bot utilise l\'image prévue pour ton serveur (prairie de cosmos).\n• **Envie d\'une autre image ?** Touche « 📱 Choisir une image » : je t\'écris en **message privé** — là, tu fais comme d\'habitude : 📎 → galerie (téléphone) ou fichiers (PC) → tu envoies. Je vérifie, j\'enregistre, et je te renvoie l\'aperçu réel de la carte. Aucune URL à recopier.\n• « 🔗 Adresse d\'image » : si tu préfères coller un lien direct. « 🌸 Fond par défaut » : pour y revenir à tout moment.',
+        desc: 'Le décor derrière la photo du nouveau.\n• **Rien à faire par défaut** : le bot utilise l\'image prévue pour ton serveur (prairie de cosmos).\n• **Envie d\'une autre image ?** Touche « 📱 Choisir une image » → le sélecteur de fichiers de Discord s\'ouvre (galerie sur téléphone, dossiers sur PC) → choisis ton image → « Envoyer ». Je la recadre tout seul au format de la carte et je te montre l\'aperçu réel. Aucune URL à recopier.\n• « 🔗 Adresse d\'image » : si tu préfères coller un lien. « 🌸 Fond par défaut » : pour y revenir à tout moment.',
       },
       message: {
         label: '✏️ Message d\'accroche',
@@ -438,23 +438,80 @@ module.exports = {
       return ouvrirFondModal(interaction);
     }
     if (id === 'cfg:accueil:fond-pj') {
-      const choixFond = require('../utils/choix-fond');
-      let note;
+      // Le sélecteur NATIF de Discord : une petite fenêtre s'ouvre, le champ
+      // « Ajouter des fichiers » lance la galerie (mobile) ou les fichiers (PC).
+      const modal = new ModalBuilder().setCustomId('cfg:accueil:fond-pj-modal').setTitle('Choisir une image');
+      const champ = new FileUploadBuilder().setCustomId('fichier')
+        .setMinValues(1).setMaxValues(1).setFileTypes('image').setRequired(true);
+      modal.addComponents({ type: 1, components: [champ.toJSON()] });
       try {
-        choixFond.demander(interaction);
-        await interaction.user.send({
-          content: '🖼️ **Envoie-moi l\'image de fond** que tu veux pour la carte de bienvenue : '
-            + 'touche 📎 sous ce message → galerie sur téléphone, fichiers sur PC → tu envoies.\n'
-            + 'Si rien ne se passe, réponds à ce message avec l\'image (appui long → Répondre).\n'
-            + 'Je vérifie, j\'enregistre, et je te montre l\'aperçu réel de la carte. '
-            + '⏱️ Tu as 10 minutes — sinon, ce MP s\'oublie tout seul.',
-        });
-        note = '📨 Je t\'ai écrit en message privé : envoie l\'image dedans, je m\'occupe du reste.';
+        await interaction.showModal(modal);
+        return true;
       } catch {
-        note = '⚠️ Tu m\'as fermé les messages privés — réouvre-les, ou utilise « /image-bienvenue » '
-          + '(joins l\'image dans la commande) ou « 🔗 Adresse d\'image ».';
+        // Vieux client sans sélecteur dans les formulaires → repli MP, puis repli URL.
+        const choixFond = require('../utils/choix-fond');
+        try {
+          choixFond.demander(interaction);
+          await interaction.user.send({
+            content: '🖼️ Le sélecteur d\'image n\'est pas dispo sur ton app — envoie-moi l\'image ici '
+              + '(bouton 📎 → galerie), je m\'occupe du reste. ⏱️ 10 minutes.',
+          });
+          return montrer('📨 Je t\'ai écrit en message privé : envoie l\'image dedans.');
+        } catch {
+          return montrer('⚠️ Impossible d\'ouvrir le sélecteur (et tes MP sont fermés) : '
+            + 'utilise « 🔗 Adresse d\'image » juste en dessous, ou la commande /image-bienvenue.');
+        }
       }
-      return montrer(note);
+    }
+    if (id === 'cfg:accueil:fond-pj-modal') {
+      // Une soumission de formulaire ne peut pas rafraîchir le panneau : on répond en privé.
+      const repondreSeul = (texte) => interaction.reply({ content: texte, ephemeral: true }).catch(() => null);
+      let piece = null;
+      try {
+        const choix = interaction.fields?.getFileUpload?.('fichier');
+        piece = choix?.first?.() ?? (choix ? [...choix][0] ?? null : null);
+      } catch { piece = null; }
+      if (!piece) {
+        await repondreSeul('🖼️ Aucune image n\'est arrivée — retouche « 📱 Choisir une image » et choisis ta photo.');
+        return true;
+      }
+      if (Number(piece.size) > 8 * 1024 * 1024) {
+        await repondreSeul('⚖️ Cette image dépasse 8 Mo — envoie une version plus légère.');
+        return true;
+      }
+      const url = piece.url || piece.proxy_url;
+      let tampon = null;
+      try {
+        tampon = await bienvenueImage.chargerImage(bienvenueImage.optimiserUrl(url))
+          .catch(() => bienvenueImage.chargerImage(url));
+        await require('@napi-rs/canvas').loadImage(tampon);
+      } catch { tampon = null; }
+      if (!tampon) {
+        await repondreSeul('🖼️ Je n\'ai pas réussi à lire cette image — retente avec un jpg ou un png classique.');
+        return true;
+      }
+      const b2 = stockage.reglages(G).bienvenue || {};
+      stockage.majReglages(G, { bienvenue: { ...b2, fond: url } });
+      try {
+        const png = await bienvenueImage.composer({
+          fondBuffer: tampon,
+          pseudo: interaction.user?.username || 'Aperçu',
+          langue: b2.langue || 'fr',
+        });
+        await interaction.reply({
+          embeds: [{
+            color: 0x5865f2,
+            title: '✅ Fond enregistré — voilà l\'aperçu de la carte',
+            description: 'Ta carte de bienvenue utilisera cette image (recadrée toute seule au bon format). '
+              + 'Pour revenir au fond par défaut : « 🌸 Fond par défaut ».',
+          }],
+          files: [{ name: 'apercu-bienvenue.png', attachment: png }],
+          ephemeral: true,
+        });
+      } catch {
+        await interaction.reply({ content: '✅ Fond enregistré !', ephemeral: true }).catch(() => null);
+      }
+      return true;
     }
     if (id === 'cfg:accueil:fond-modal') {
       const brut = String(interaction.fields?.getTextInputValue('url') || '').trim();
