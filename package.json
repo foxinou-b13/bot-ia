@@ -1,0 +1,19 @@
+{
+  "name": "otaku-bot",
+  "version": "1.0.0",
+  "description": "Bot Discord Otaku — IA (Gemini + Groq) et modération complète, en français.",
+  "main": "index.js",
+  "type": "commonjs",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "start": "node index.js",
+    "deploy": "node deploy-commands.js",
+    "test": "node tests/run-all.js"
+  },
+  "dependencies": {
+    "discord.js": "^14.16.3",
+    "dotenv": "^16.4.5"
+  }
+}
