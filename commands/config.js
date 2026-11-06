@@ -65,7 +65,7 @@ const RUBRIQUES = {
       },
       fond: {
         label: '🖼️ Image de fond de la carte',
-        desc: 'Le décor derrière la photo du nouveau.\n• **Rien à faire par défaut** : le bot utilise l\'image prévue pour ton serveur (prairie de cosmos).\n• **Envie d\'une autre image ?** Touche « 📱 Choisir une image » : le bot poste une invitation juste au-dessus — tu y **réponds avec ton image** (📎 → galerie du téléphone, fichiers sur PC). Il vérifie, recadre tout seul au format de la carte, te montre l\'aperçu réel, puis **efface les deux messages** : rien ne traîne dans le salon, aucun message privé.\n• « 🔗 Adresse d\'image » : si tu préfères coller un lien. « 🌸 Fond par défaut » : pour y revenir à tout moment.',
+        desc: 'Le décor derrière la photo du nouveau.\n• **Rien à faire par défaut** : le bot utilise l\'image prévue pour ton serveur (prairie de cosmos).\n• **Envie d\'une autre image ?** Touche « 📱 Choisir une image » : **une fenêtre s\'ouvre automatiquement** — « Ajouter des fichiers » ouvre direct ta galerie (téléphone) ou tes dossiers (PC). L\'image va DIRECTEMENT au bot : rien n\'est posté dans le salon, rien en MP. Elle est rangée dans mon petit salon privé « otaku-fonds-de-carte » (invisible pour les membres) pour ne jamais mourir, et tu reçois l\'aperçu réel de la carte en privé.\n• Si la fenêtre refuse de s\'ouvrir (appli très ancienne) : le bot poste une invitation dans le salon — tu y réponds avec 📎, il range et efface tout.\n• « 🔗 Adresse d\'image » : coller un lien. « 🌸 Fond par défaut » : y revenir à tout moment.',
       },
       message: {
         label: '✏️ Message d\'accroche',
@@ -432,32 +432,47 @@ module.exports = {
         langue === 'en' ? '🌍 La carte affichera « WELCOME ».' : '🌍 La carte affichera « BIENVENUE ».');
     }
     if (id === 'cfg:accueil:fond-off') {
-      return maj({ bienvenue: { fond: null, fondTheme: null } }, '🌸 Retour au fond par défaut du serveur.');
+      const bOff = stockage.reglages(G).bienvenue || {};
+      if (bOff.fondStock) require('../utils/choix-fond').supprimerCopie(interaction.guild, bOff.fondStock);
+      return maj({ bienvenue: { fond: null, fondTheme: null, fondStock: null } }, '🌸 Retour au fond par défaut du serveur.');
     }
     if (id === 'cfg:accueil:fond-url') {
       return ouvrirFondModal(interaction);
     }
     if (id === 'cfg:accueil:fond-pj') {
-      // Discord refuse les champs « fichier » dans ses formulaires (testé en live,
-      // logs Render du 06/11/2026) : on passe donc par une réponse dans le salon —
-      // le 📎 natif ouvre la galerie du téléphone (ou les fichiers sur PC), le bot
-      // range l'image puis efface les deux messages. Zéro MP, zéro trace, zéro URL.
+      // Voie OFFICIELLE : la fenêtre native du client s'ouvre d'elle-même (modale
+      // « Label + champ fichiers », structure exacte de la doc Discord, vérifiée
+      // le 06/11/2026). Un tap dans la fenêtre → galerie du téléphone / dossiers
+      // du PC ; l'image part direct au bot, RIEN n'est posté dans le salon.
       const choixFond = require('../utils/choix-fond');
-      // double clic ? on renvoie vers l'invitation déjà en cours, sans en poster une 2e
-      const enCours = choixFond.chercherEnAttente(interaction.user.id);
-      if (enCours && enCours.guildId === interaction.guildId) {
-        return montrer('⬆️ Ton invitation t’attend déjà dans le salon — réponds-lui avec ton image.');
+      // une invitation de repli traîne encore ? on la range avant d'ouvrir la fenêtre
+      const relance = choixFond.chercherEnAttente(interaction.user.id);
+      if (relance) {
+        choixFond.__enAttente.delete(interaction.user.id);
+        if (relance.prompt) relance.prompt.delete().catch(() => null);
       }
       let invitation = null;
+      try {
+        await interaction.showModal(choixFond.modaleFond());
+        return true;
+      } catch (erreur) {
+        console.warn('⚠️ Fenêtre du sélecteur impossible (client trop ancien ?) — repli invitation :', erreur.message);
+      }
+      // Repli (appli très ancienne) : invitation dans le salon, réponse au 📎,
+      // puis le bot range et efface les deux messages. Toujours zéro MP.
+      const enCours = choixFond.chercherEnAttente(interaction.user.id);
+      if (enCours && enCours.guildId === interaction.guildId) {
+        return montrer('⬆️ Ton invitation t\u2019attend déjà dans le salon — réponds-lui avec ton image.');
+      }
       try {
         invitation = await interaction.channel.send({
           content: `📎 ${interaction.user}, réponds à ce message avec ton image de fond : `
             + 'touche le trombone 📎 → galerie sur téléphone, fichiers sur PC. '
-            + 'Dès reçue, je vérifie, je te montre l’aperçu, et j’efface ces deux messages.',
+            + 'Dès reçue, je vérifie, je te montre l\u2019aperçu, et j\u2019efface ces deux messages.',
           allowedMentions: { users: [interaction.user.id] },
         });
       } catch {
-        return montrer('⚠️ Je ne peux pas écrire dans ce salon — utilise « 🔗 Adresse d’image » juste en dessous.');
+        return montrer('⚠️ Je ne peux pas écrire dans ce salon — utilise « 🔗 Adresse d\u2019image » juste en dessous.');
       }
       choixFond.demander(interaction, invitation);
       // si l'admin ne répond pas dans les 10 minutes, on nettoie l'invitation
@@ -469,18 +484,36 @@ module.exports = {
         }
       }, 10 * 60 * 1000);
       if (retard.unref) retard.unref();   // ne retient jamais le processus (arrêts, tests)
-      return montrer('⬆️ Regarde juste au-dessus : **réponds au message du bot avec ton image**. '
-        + 'Il te montrera l’aperçu réel de la carte, enregistrera le fond, et effacera les messages.');
+      return montrer('📱 Ma fenêtre ne peut pas s\u2019ouvrir sur cette version de l\u2019appli (pense à la mettre à jour) : '
+        + 'réponds au message du bot avec ton image (📎), je range et j\u2019efface tout.');
+    }
+    if (id === 'cfg:accueil:fond-pj-modal') {
+      // la fenêtre est soumise : l'image arrive ICI, jamais dans le salon
+      const choixFond = require('../utils/choix-fond');
+      const bruts = typeof interaction.fields?.getUploadedFiles === 'function'
+        ? interaction.fields.getUploadedFiles('fichier')
+        : null;
+      const piece = (bruts && typeof bruts.first === 'function' ? bruts.first()
+        : (Array.isArray(bruts) ? bruts[0] : (bruts || null))) || null;
+      const resultat = await choixFond.traiterPiece(interaction.guild, interaction.client, G, piece);
+      if (!resultat.ok) {
+        return interaction.reply({ content: choixFond.messageErreur(resultat.raison),
+          flags: MessageFlags.Ephemeral }).catch(() => null);
+      }
+      const apercu = await choixFond.paquetApercu(resultat, interaction.user.username);
+      return interaction.reply({ ...apercu, flags: MessageFlags.Ephemeral }).catch(() => null);
     }
     if (id === 'cfg:accueil:fond-modal') {
       const brut = String(interaction.fields?.getTextInputValue('url') || '').trim();
       const verdict = bienvenueImage.validerUrlFond(brut);
       if (!verdict.ok) {
         return maj({ bienvenue: { fond: null } },
-          '⚠️ Cette adresse n\'est pas une image en http(s) — fond par thème rétabli.');
+          '⚠️ Cette adresse n\'est pas une image en http(s) — fond par défaut rétabli.');
       }
-      return maj({ bienvenue: { fond: verdict.valeur } },
-        verdict.valeur ? '🖼️ Fond enregistré : les cartes utiliseront cette image.' : '🖼️ Fond retiré — le thème du bot reprend la main.');
+      const bUrl = stockage.reglages(G).bienvenue || {};
+      if (bUrl.fondStock) require('../utils/choix-fond').supprimerCopie(interaction.guild, bUrl.fondStock);
+      return maj({ bienvenue: { fond: verdict.valeur, fondStock: null } },
+        verdict.valeur ? '🖼️ Fond enregistré : les cartes utiliseront cette image.' : '🖼️ Fond retiré — le fond par défaut reprend la main.');
     }
     if (id === 'cfg:accueil:off') {
       // « couper » se fait depuis la carte du réglage : on revient à la rubrique après.
