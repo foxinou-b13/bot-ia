@@ -445,25 +445,23 @@ module.exports = {
       // le 06/11/2026). Un tap dans la fenêtre → galerie du téléphone / dossiers
       // du PC ; l'image part direct au bot, RIEN n'est posté dans le salon.
       const choixFond = require('../utils/choix-fond');
-      // une invitation de repli traîne encore ? on la range avant d'ouvrir la fenêtre
-      const relance = choixFond.chercherEnAttente(interaction.user.id);
-      if (relance) {
-        choixFond.__enAttente.delete(interaction.user.id);
-        if (relance.prompt) relance.prompt.delete().catch(() => null);
+      const enCours = choixFond.chercherEnAttente(interaction.user.id);
+      // invitation de repli déjà en cours : un double clic ne doit pas en poster une deuxième
+      if (enCours && enCours.guildId === interaction.guildId) {
+        return montrer('⬆️ Ton invitation t\u2019attend déjà dans le salon — réponds-lui avec ton image.');
       }
       let invitation = null;
       try {
         await interaction.showModal(choixFond.modaleFond());
+        // la fenêtre s'ouvre : si une invitation orpheline traînait d'une session précédente, on la range
+        if (enCours && enCours.prompt) enCours.prompt.delete().catch(() => null);
+        if (enCours) choixFond.__enAttente.delete(interaction.user.id);
         return true;
       } catch (erreur) {
         console.warn('⚠️ Fenêtre du sélecteur impossible (client trop ancien ?) — repli invitation :', erreur.message);
       }
       // Repli (appli très ancienne) : invitation dans le salon, réponse au 📎,
       // puis le bot range et efface les deux messages. Toujours zéro MP.
-      const enCours = choixFond.chercherEnAttente(interaction.user.id);
-      if (enCours && enCours.guildId === interaction.guildId) {
-        return montrer('⬆️ Ton invitation t\u2019attend déjà dans le salon — réponds-lui avec ton image.');
-      }
       try {
         invitation = await interaction.channel.send({
           content: `📎 ${interaction.user}, réponds à ce message avec ton image de fond : `
