@@ -53,7 +53,7 @@ test('/guide : affiche les salons configurés (visible par tous)', async () => {
   const inter = interactionGuide(G);
   await guide.executer(inter);
   const json = inter.journal[0].embeds[0].toJSON();
-  assert.strictEqual(inter.journal[0].ephemeral, false, 'le guide doit être public');
+  assert.strictEqual(inter.journal[0].ephemeral, undefined, 'le guide doit être public (sans option éphémère)');
   const valeur = json.fields.map((f) => f.value).join(' ');
   assert.ok(valeur.includes('<#S-REG>'), 'le lien des règles doit être dans la carte');
   assert.ok(valeur.includes('<#S-SUP>'), 'le lien du support doit être dans la carte');

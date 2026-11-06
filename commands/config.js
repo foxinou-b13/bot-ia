@@ -14,7 +14,7 @@ const {
   SlashCommandBuilder, PermissionsBitField, ActionRowBuilder,
   StringSelectMenuBuilder, ChannelSelectMenuBuilder, RoleSelectMenuBuilder,
   ButtonBuilder, ButtonStyle, ChannelType, EmbedBuilder,
-  ModalBuilder, TextInputBuilder, TextInputStyle, FileUploadBuilder,
+  ModalBuilder, TextInputBuilder, TextInputStyle, MessageFlags,
 } = require('discord.js');
 const perms = require('../utils/permissions');
 const panneaux = require('../utils/panneaux');
@@ -65,7 +65,7 @@ const RUBRIQUES = {
       },
       fond: {
         label: '🖼️ Image de fond de la carte',
-        desc: 'Le décor derrière la photo du nouveau.\n• **Rien à faire par défaut** : le bot utilise l\'image prévue pour ton serveur (prairie de cosmos).\n• **Envie d\'une autre image ?** Touche « 📱 Choisir une image » → le sélecteur de fichiers de Discord s\'ouvre (galerie sur téléphone, dossiers sur PC) → choisis ton image → « Envoyer ». Je la recadre tout seul au format de la carte et je te montre l\'aperçu réel. Aucune URL à recopier.\n• « 🔗 Adresse d\'image » : si tu préfères coller un lien. « 🌸 Fond par défaut » : pour y revenir à tout moment.',
+        desc: 'Le décor derrière la photo du nouveau.\n• **Rien à faire par défaut** : le bot utilise l\'image prévue pour ton serveur (prairie de cosmos).\n• **Envie d\'une autre image ?** Touche « 📱 Choisir une image » : le bot poste une invitation juste au-dessus — tu y **réponds avec ton image** (📎 → galerie du téléphone, fichiers sur PC). Il vérifie, recadre tout seul au format de la carte, te montre l\'aperçu réel, puis **efface les deux messages** : rien ne traîne dans le salon, aucun message privé.\n• « 🔗 Adresse d\'image » : si tu préfères coller un lien. « 🌸 Fond par défaut » : pour y revenir à tout moment.',
       },
       message: {
         label: '✏️ Message d\'accroche',
@@ -370,7 +370,7 @@ module.exports = {
     const refus = perms.verifier(interaction, PermissionsBitField.Flags.ManageGuild);
     if (refus) return panneaux.oups(interaction, '🚫 Action impossible', refus);
     // Règle posée par l'admin : /config ouvre TOUJOURS le sélecteur de rubriques seul.
-    return interaction.reply({ ...ecranRacine(), ephemeral: true }).catch(() => null);
+    return interaction.reply({ ...ecranRacine(), flags: MessageFlags.Ephemeral }).catch(() => null);
   },
 
   // ─── menus, sélecteurs, boutons, formulaires ───
@@ -438,72 +438,34 @@ module.exports = {
       return ouvrirFondModal(interaction);
     }
     if (id === 'cfg:accueil:fond-pj') {
-      // Le sélecteur NATIF de Discord : une petite fenêtre s'ouvre, le champ
-      // « Ajouter des fichiers » lance la galerie (mobile) ou les fichiers (PC).
-      const modal = new ModalBuilder().setCustomId('cfg:accueil:fond-pj-modal').setTitle('Choisir une image');
-      const champ = new FileUploadBuilder().setCustomId('fichier')
-        .setMinValues(1).setMaxValues(1).setFileTypes('image').setRequired(true);
-      modal.addComponents({ type: 1, components: [champ.toJSON()] });
+      // Discord refuse les champs « fichier » dans ses formulaires (testé en live,
+      // logs Render du 06/11/2026) : on passe donc par une réponse dans le salon —
+      // le 📎 natif ouvre la galerie du téléphone (ou les fichiers sur PC), le bot
+      // range l'image puis efface les deux messages. Zéro MP, zéro trace, zéro URL.
+      const choixFond = require('../utils/choix-fond');
+      let invitation = null;
       try {
-        await interaction.showModal(modal);
-        return true;
-      } catch (erreur) {
-        // Plus JAMAIS de message privé : si la fenêtre ne s'ouvre pas, on le dit sur la carte.
-        console.warn('⚠️ Modale du sélecteur d\'image impossible :', erreur.message);
-        return montrer('⚠️ Ton application Discord n\'arrive pas à ouvrir ce sélecteur — '
-          + 'mets-la à jour, puis retouche « 📱 Choisir une image ». '
-          + 'En attendant : « 🔗 Adresse d\'image » ou la commande /image-bienvenue.');
-      }
-    }
-    if (id === 'cfg:accueil:fond-pj-modal') {
-      // Une soumission de formulaire ne peut pas rafraîchir le panneau : on répond en privé.
-      const repondreSeul = (texte) => interaction.reply({ content: texte, ephemeral: true }).catch(() => null);
-      let piece = null;
-      try {
-        const choix = interaction.fields?.getFileUpload?.('fichier');
-        piece = choix?.first?.() ?? (choix ? [...choix][0] ?? null : null);
-      } catch { piece = null; }
-      if (!piece) {
-        await repondreSeul('🖼️ Aucune image n\'est arrivée — retouche « 📱 Choisir une image » et choisis ta photo.');
-        return true;
-      }
-      if (Number(piece.size) > 8 * 1024 * 1024) {
-        await repondreSeul('⚖️ Cette image dépasse 8 Mo — envoie une version plus légère.');
-        return true;
-      }
-      const url = piece.url || piece.proxy_url;
-      let tampon = null;
-      try {
-        tampon = await bienvenueImage.chargerImage(bienvenueImage.optimiserUrl(url))
-          .catch(() => bienvenueImage.chargerImage(url));
-        await require('@napi-rs/canvas').loadImage(tampon);
-      } catch { tampon = null; }
-      if (!tampon) {
-        await repondreSeul('🖼️ Je n\'ai pas réussi à lire cette image — retente avec un jpg ou un png classique.');
-        return true;
-      }
-      const b2 = stockage.reglages(G).bienvenue || {};
-      stockage.majReglages(G, { bienvenue: { ...b2, fond: url } });
-      try {
-        const png = await bienvenueImage.composer({
-          fondBuffer: tampon,
-          pseudo: interaction.user?.username || 'Aperçu',
-          langue: b2.langue || 'fr',
-        });
-        await interaction.reply({
-          embeds: [{
-            color: 0x5865f2,
-            title: '✅ Fond enregistré — voilà l\'aperçu de la carte',
-            description: 'Ta carte de bienvenue utilisera cette image (recadrée toute seule au bon format). '
-              + 'Pour revenir au fond par défaut : « 🌸 Fond par défaut ».',
-          }],
-          files: [{ name: 'apercu-bienvenue.png', attachment: png }],
-          ephemeral: true,
+        invitation = await interaction.channel.send({
+          content: `📎 ${interaction.user}, réponds à ce message avec ton image de fond : `
+            + 'touche le trombone 📎 → galerie sur téléphone, fichiers sur PC. '
+            + 'Dès reçue, je vérifie, je te montre l’aperçu, et j’efface ces deux messages.',
+          allowedMentions: { users: [interaction.user.id] },
         });
       } catch {
-        await interaction.reply({ content: '✅ Fond enregistré !', ephemeral: true }).catch(() => null);
+        return montrer('⚠️ Je ne peux pas écrire dans ce salon — utilise « 🔗 Adresse d’image » juste en dessous.');
       }
-      return true;
+      choixFond.demander(interaction, invitation);
+      // si l'admin ne répond pas dans les 10 minutes, on nettoie l'invitation
+      const utilisateur = interaction.user.id;
+      const retard = setTimeout(() => {
+        if (choixFond.chercherEnAttente(utilisateur)) {
+          choixFond.__enAttente.delete(utilisateur);
+          invitation.delete().catch(() => null);
+        }
+      }, 10 * 60 * 1000);
+      if (retard.unref) retard.unref();   // ne retient jamais le processus (arrêts, tests)
+      return montrer('⬆️ Regarde juste au-dessus : **réponds au message du bot avec ton image**. '
+        + 'Il te montrera l’aperçu réel de la carte, enregistrera le fond, et effacera les messages.');
     }
     if (id === 'cfg:accueil:fond-modal') {
       const brut = String(interaction.fields?.getTextInputValue('url') || '').trim();
@@ -653,6 +615,6 @@ async function rafraichir(interaction, note, forcerRubrique = false) {
   try {
     await interaction.update(paquet);
   } catch {
-    await interaction.reply({ ...paquet, ephemeral: true }).catch(() => null);
+    await interaction.reply({ ...paquet, flags: MessageFlags.Ephemeral }).catch(() => null);
   }
 }

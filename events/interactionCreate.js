@@ -2,7 +2,8 @@
  * events/interactionCreate.js — reçoit toutes les commandes.
  * Règle d'or : l'utilisateur reçoit TOUJOURS une réponse, jamais de silence.
  */
-const { Events } = require('discord.js');
+const { Events, MessageFlags,
+} = require('discord.js');
 const panneaux = require('../utils/panneaux');
 
 module.exports = {
@@ -24,7 +25,7 @@ module.exports = {
           if (!interaction.replied && !interaction.deferred) {
             await interaction.reply({
               embeds: [panneaux.erreur('❌ Petit souci', 'Je n\'ai pas pu enregistrer ce réglage. Réessaie.')],
-              ephemeral: true,
+              flags: MessageFlags.Ephemeral,
             }).catch(() => null);
           }
           return;
@@ -53,7 +54,7 @@ module.exports = {
         if (interaction.deferred || interaction.replied) {
           await interaction.editReply(message);
         } else {
-          await interaction.reply({ ...message, ephemeral: true });
+          await interaction.reply({ ...message, flags: MessageFlags.Ephemeral });
         }
       } catch {
         // Rien de plus à faire : on ne laisse jamais le bot planter pour ça.

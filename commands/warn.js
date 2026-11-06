@@ -1,4 +1,5 @@
-const { SlashCommandBuilder, PermissionsBitField } = require('discord.js');
+const { SlashCommandBuilder, PermissionsBitField, MessageFlags,
+} = require('discord.js');
 const perms = require('../utils/permissions');
 const panneaux = require('../utils/panneaux');
 const sanctions = require('../utils/sanctions');
@@ -22,7 +23,7 @@ module.exports = {
     if (probleme) return panneaux.oups(interaction, '🚫 Action impossible', probleme);
 
     const raison = perms.propreRaison(interaction.options.getString('raison'));
-    await interaction.deferReply({ ephemeral: true });
+    await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
     const liste = stockage.ajouterAvert(interaction.guildId, cible.id, {
       raison,

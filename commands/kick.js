@@ -1,4 +1,5 @@
-const { SlashCommandBuilder, PermissionsBitField } = require('discord.js');
+const { SlashCommandBuilder, PermissionsBitField, MessageFlags,
+} = require('discord.js');
 const perms = require('../utils/permissions');
 const panneaux = require('../utils/panneaux');
 const sanctions = require('../utils/sanctions');
@@ -24,7 +25,7 @@ module.exports = {
     }
 
     const raison = perms.propreRaison(interaction.options.getString('raison'));
-    await interaction.deferReply({ ephemeral: true });
+    await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
     const resultat = await sanctions.expulser(cible, { raison, auteur: interaction.user.tag });
     if (!resultat.ok) {

@@ -5,6 +5,7 @@ const assert = require('assert');
 const { createCanvas } = require('@napi-rs/canvas');
 const img = require('../utils/bienvenue-image');
 const { membreMock, guildeMock, salonMock } = require('./aide');
+const { MessageFlags } = require('discord.js');
 const stockage = require('../utils/stockage');
 const { chargerCommandes } = require('../utils/commandes');
 
@@ -198,7 +199,7 @@ test('/image-bienvenue : accepte l\'image, l\'enregistre et renvoie un vrai aper
     await cmdFond.executer(inter);
     assert.strictEqual(stockage.reglages('G-FOND-OK').bienvenue.fond, 'https://cdn.discordapp.com/attachments/1/2/photo.png');
     const paquet = inter.journal[0][1];
-    assert.ok(paquet.ephemeral, 'la réponse doit être privée');
+    assert.strictEqual(paquet.flags, MessageFlags.Ephemeral, 'la réponse doit être privée');
     assert.ok(paquet.files?.length, 'aucun aperçu joint');
     assert.ok(paquet.files[0].attachment[0] === 0x89, 'l\'aperçu n\'est pas un PNG');
     assert.ok(urlDemandee.includes('resize=cover'), 'le téléchargement ne passe pas par le recadrage CDN');
@@ -234,153 +235,163 @@ test('toutes les commandes sont chargées, y compris la nouvelle', () => {
   assert.ok(chargerCommandes().commandes.has('image-bienvenue'), 'commande non enregistrée');
 });
 
-// ─── le parcours « 📱 Choisir ton image » (MP, sélecteur natif du client) ───
+// ─── le parcours « 📱 Choisir une image » (invitation dans le salon, zéro MP) ───
 test('la carte du fond propose le bouton 📱 (vrai bouton, plus de lien externe)', () => {
   stockage.majReglages('G-BI', { bienvenue: { fond: null } });
   const carte = config.carteReglage('G-BI', 'accueil', 'fond', 'C1', null);
   const boutons = carte.components[0].toJSON().components;
-  assert.ok(boutons.some((b) => b.custom_id === 'cfg:accueil:fond-pj' && b.style === 1),
-    'le bouton « Choisir ton image » doit être un bouton normal et visible');
+  assert.ok(boutons.some((b) => b.custom_id === 'cfg:accueil:fond-pj' && b.style === 1 && /Choisir une image/.test(b.label)),
+    'le bouton « Choisir une image » doit être un bouton normal, visible, avec le label exact');
   assert.ok(!boutons.some((b) => b.style === 5), 'plus aucun bouton-lien externe');
 });
 
 const choixFond = require('../utils/choix-fond');
 
-test('bouton 📱 : le bot ouvre LE sélecteur natif de Discord (modale avec champ fichier)', async () => {
-  const inter = selecteur('cfg:accueil:fond-pj', { isButton: () => true, async showModal(m) { this.modale = m; } });
-  await config.composant(inter);
-  const brut = inter.modale.toJSON();
-  assert.strictEqual(brut.title, 'Choisir une image');
-  const champ = brut.components[0].components[0];
-  assert.strictEqual(champ.type, 19, 'type 19 = champ « ajouter des fichiers »');
-  assert.deepStrictEqual(champ.file_types, ['image'], 'seules des images doivent être proposées');
-  assert.strictEqual(champ.max_values, 1);
-});
-
-test('bouton 📱 : si le client est trop vieux, on l\'explique sur la carte — JAMAIS de MP', async () => {
+test('bouton 📱 : le bot poste une invitation dans le salon et attend la réponse — zéro MP, zéro modale', async () => {
+  choixFond.__enAttente.clear();
+  const invitations = [];
+  let mpTente = false;
   const inter = selecteur('cfg:accueil:fond-pj', {
     isButton: () => true,
-    async showModal() { throw new Error('client pas à jour'); },
+    channel: { send: async (paquet) => { invitations.push(paquet); return { id: 'msg-invite', async delete() {} }; } },
   });
-  let mpTente = false;
-  inter.user.send = async () => { mpTente = true; };
+  inter.user.send = async () => { mpTente = true; throw new Error('le bot ne doit plus écrire en MP'); };
   await config.composant(inter);
-  assert.strictEqual(mpTente, false, 'le bot ne doit plus écrire en MP');
-  const note = inter.journal.find(([t]) => t === 'update')[1].embeds[0].toJSON().description;
-  assert.ok(/mets-la à jour/.test(note), note);
+  assert.strictEqual(invitations.length, 1, 'exactement un message-invitation dans le salon');
+  assert.ok(/réponds à ce message/.test(invitations[0].content), invitations[0].content);
+  assert.ok(/📎/.test(invitations[0].content), "l'invitation doit expliquer le trombone");
+  const attente = choixFond.chercherEnAttente('u');
+  assert.ok(attente, "l'admin est mis en attente");
+  assert.strictEqual(attente.messageId, 'msg-invite', "l'attente mémorise le message auquel répondre");
+  assert.strictEqual(attente.guildId, 'G-BI');
+  assert.strictEqual(mpTente, false, 'le bot ne doit JAMAIS écrire en MP');
+  const note = inter.journal.find(([t]) => t === 'update')[1];
+  assert.ok(/réponds au message du bot/.test(JSON.stringify(note)), 'la carte doit guider vers la réponse');
+  choixFond.__enAttente.clear();
 });
 
-test('modale soumise avec une image : vérifiée, enregistrée, aperçu renvoyé', async () => {
-  const G2 = 'G-MODAL-OK';
-  stockage.majReglages(G2, { bienvenue: { langue: 'en' } });
+test('bouton 📱 : salon où le bot ne peut pas écrire → on renvoie vers « 🔗 Adresse d\u2019image », sans crash ni MP', async () => {
+  const inter = selecteur('cfg:accueil:fond-pj', {
+    isButton: () => true,
+    channel: { send: async () => { throw new Error('missing permissions'); } },
+  });
+  inter.user.send = async () => { throw new Error('le bot ne doit pas écrire en MP'); };
+  await config.composant(inter);
+  const note = inter.journal.find(([t]) => t === 'update')[1];
+  assert.ok(/Adresse d/.test(JSON.stringify(note)), JSON.stringify(note));
+});
+
+test('réponse à l\u2019invitation avec une image : enregistrée, aperçu PNG posté, invitation et réponse EFFACÉES', async () => {
+  const G = 'G-REP-OK';
+  stockage.majReglages(G, { bienvenue: { langue: 'fr', fond: null } });
   const original = img.chargerImage;
   img.chargerImage = async () => {
-    const { createCanvas } = require('@napi-rs/canvas');
     const c = createCanvas(900, 500); const x = c.getContext('2d');
     x.fillStyle = '#4fc3d9'; x.fillRect(0, 0, 900, 500);
     return c.toBuffer('image/png');
   };
   try {
-    const inter = selecteur('cfg:accueil:fond-pj-modal', {
-      isModalSubmit: () => true, isStringSelectMenu: () => false,
-      fields: { getFileUpload: () => ({ first: () => ({ url: 'https://cdn.discordapp.com/attachments/7/7/mono.jpg', size: 30000 }) }) },
-    });
-    inter.user = { id: 'u', username: 'Foxinou' };
-    inter.guildId = G2;
-    await config.composant(inter);
-    assert.strictEqual(stockage.reglages(G2).bienvenue.fond, 'https://cdn.discordapp.com/attachments/7/7/mono.jpg');
-    const paquet = inter.journal.find(([t]) => t === 'reply')[1];
-    assert.ok(paquet.ephemeral, 'la réponse doit être privée');
-    assert.ok(paquet.files?.[0]?.attachment?.[0] === 0x89, 'aperçu PNG attendu');
-    assert.ok(/WELCOME|aperçu/i.test(JSON.stringify(paquet.embeds[0])), 'l\'aperçu doit suivre la langue EN');
-  } finally { img.chargerImage = original; }
-});
-
-test('modale soumise sans image ou avec une image énorme : réponses claires, rien d\'enregistré', async () => {
-  const G3 = 'G-MODAL-KO';
-  const vide = selecteur('cfg:accueil:fond-pj-modal', {
-    isModalSubmit: () => true, isStringSelectMenu: () => false,
-    fields: { getFileUpload: () => null },
-  });
-  vide.guildId = G3;
-  await config.composant(vide);
-  assert.ok(/Aucune image/.test(JSON.stringify(vide.journal)), JSON.stringify(vide.journal));
-  assert.strictEqual(stockage.reglages(G3).bienvenue.fond, null);
-
-  const lourde = selecteur('cfg:accueil:fond-pj-modal', {
-    isModalSubmit: () => true, isStringSelectMenu: () => false,
-    fields: { getFileUpload: () => ({ first: () => ({ url: 'https://x/y.png', size: 30 * 1024 * 1024 }) }) },
-  });
-  lourde.guildId = G3;
-  await config.composant(lourde);
-  assert.ok(/8 Mo/.test(JSON.stringify(lourde.journal)));
-  assert.strictEqual(stockage.reglages(G3).bienvenue.fond, null);
-});
-
-test('MP avec une image : vérifiée, enregistrée, aperçu renvoyé, attente levée', async () => {
-  const G2 = 'G-DMFOND-OK';
-  stockage.majReglages(G2, { bienvenue: { langue: 'fr' } });
-  choixFond.__enAttente.set('dm1', { guildId: G2, expire: Date.now() + 60000 });
-  const original = img.chargerImage;
-  img.chargerImage = async () => {
-    const { createCanvas } = require('@napi-rs/canvas');
-    const c = createCanvas(600, 900); const x = c.getContext('2d');
-    x.fillStyle = '#d98fae'; x.fillRect(0, 0, 600, 900);
-    return c.toBuffer('image/png');
-  };
-  try {
-    let reponse = null;
+    const msgInvite = { id: 'msg-invite', suppr: 0, async delete() { this.suppr++; } };
+    choixFond.__enAttente.set('u', { guildId: G, messageId: 'msg-invite', prompt: msgInvite, expire: Date.now() + 60000 });
+    let apercu = null; let erreur = null;
     const message = {
-      author: { id: 'dm1', bot: false, username: 'Nina' },
-      attachments: { values: () => [{ url: 'https://cdn.discordapp.com/attachments/1/2/fond.png', content_type: 'image/png', size: 12000 }] },
-      async reply(p) { reponse = p; return {}; },
+      author: { id: 'u', username: 'Nina', bot: false },
+      guild: { id: G },
+      channel: { send: async (paquet) => { apercu = paquet; } },
+      messageReference: { messageId: 'msg-invite' },
+      attachments: { values: () => [{ url: 'https://cdn.discordapp.com/attachments/1/2/fond.png', content_type: 'image/png', size: 120000 }] },
+      async reply(paquet) { erreur = paquet; },
+      suppr: 0, async delete() { this.suppr++; },
     };
-    const pris = await choixFond.traiterMp(message);
-    assert.strictEqual(pris, true);
-    assert.strictEqual(stockage.reglages(G2).bienvenue.fond, 'https://cdn.discordapp.com/attachments/1/2/fond.png');
-    assert.ok(reponse.files?.length && reponse.files[0].attachment[0] === 0x89, 'aperçu PNG attendu');
-    assert.strictEqual(choixFond.chercherEnAttente('dm1'), null, 'l\'attente doit être levée');
-  } finally { img.chargerImage = original; choixFond.__enAttente.delete('dm1'); }
+    assert.strictEqual(await choixFond.traiterReponse(message), true, 'le message doit être consommé');
+    assert.strictEqual(stockage.reglages(G).bienvenue.fond, 'https://cdn.discordapp.com/attachments/1/2/fond.png');
+    assert.strictEqual(message.suppr, 1, "la réponse avec l'image doit disparaître du salon");
+    assert.strictEqual(msgInvite.suppr, 1, 'le message-invitation doit disparaître aussi');
+    assert.ok(!erreur, `pas de message d'erreur, reçu : ${JSON.stringify(erreur)}`);
+    assert.ok(apercu && apercu.files?.[0]?.name === 'apercu-bienvenue.png', "l'aperçu PNG doit suivre dans le salon");
+    assert.strictEqual(apercu.files[0].attachment[0], 0x89, "l'aperçu doit être un PNG");
+    assert.ok(/Fond enregistré/.test(JSON.stringify(apercu)), 'le mot de confirmation doit être là');
+    assert.strictEqual(choixFond.chercherEnAttente('u'), null, 'attente levée après traitement');
+  } finally { img.chargerImage = original; choixFond.__enAttente.delete('u'); }
 });
 
-test('MP sans image : on redemande poliment, l\'attente reste ouverte', async () => {
-  choixFond.__enAttente.set('dm2', { guildId: 'G-X', expire: Date.now() + 60000 });
-  let reponse = null;
+test('réponse SANS image : on redemande poliment, rien ne s\u2019efface, l\u2019attente reste ouverte', async () => {
+  choixFond.__enAttente.set('u', {
+    guildId: 'G-X', messageId: 'msg-invite',
+    prompt: { async delete() { throw new Error('ne doit pas effacer le message-invitation'); } },
+    expire: Date.now() + 60000,
+  });
+  let note = null; let efface = false;
   const message = {
-    author: { id: 'dm2', bot: false, username: 'Zoé' },
+    author: { id: 'u', bot: false }, guild: { id: 'G-X' },
+    messageReference: { messageId: 'msg-invite' },
     attachments: { values: () => [] },
-    async reply(p) { reponse = p; return {}; },
+    async reply(paquet) { note = paquet; },
+    async delete() { efface = true; },
   };
-  const pris = await choixFond.traiterMp(message);
-  assert.strictEqual(pris, true);
-  assert.ok(/pièce jointe|galerie/.test(reponse.content), reponse && reponse.content);
-  assert.ok(choixFond.chercherEnAttente('dm2'), 'l\'attente doit rester ouverte pour réessayer');
-  choixFond.__enAttente.delete('dm2');
+  assert.strictEqual(await choixFond.traiterReponse(message), true, 'un message-consommé ne doit pas être modéré deux fois');
+  assert.ok(/image/.test(note.content), note && note.content);
+  assert.strictEqual(efface, false, 'sans image, on garde les messages pour réessayer');
+  assert.ok(choixFond.chercherEnAttente('u'), "l'attente reste ouverte");
+  choixFond.__enAttente.delete('u');
 });
 
-test('MP : un message qui ne vient pas d\'un admin en attente est ignoré', async () => {
-  const message = { author: { id: 'inconnu', bot: false }, attachments: { values: () => [] }, async reply() { throw new Error('ne doit pas répondre'); } };
-  assert.strictEqual(await choixFond.traiterMp(message), false);
+test('image trop lourde (30 Mo) → refus clair, rien d\u2019enregistré', async () => {
+  const G = 'G-REP-LOURDE';
+  stockage.majReglages(G, { bienvenue: { fond: null } });
+  choixFond.__enAttente.set('u', { guildId: G, messageId: 'm', prompt: null, expire: Date.now() + 60000 });
+  let note = null;
+  await choixFond.traiterReponse({
+    author: { id: 'u', bot: false }, guild: { id: G }, messageReference: { messageId: 'm' },
+    attachments: { values: () => [{ url: 'https://x/y.png', content_type: 'image/png', size: 30 * 1024 * 1024 }] },
+    async reply(paquet) { note = paquet; },
+    async delete() {},
+  });
+  assert.ok(/8 Mo/.test(note.content), note && note.content);
+  assert.strictEqual(stockage.reglages(G).bienvenue.fond, null);
+  choixFond.__enAttente.delete('u');
 });
 
-test('MP : image trop lourde → refus propre, rien d\'enregistré', async () => {
-  const G3 = 'G-DMFOND-LOURDE';
-  choixFond.__enAttente.set('dm3', { guildId: G3, expire: Date.now() + 60000 });
-  let reponse = null;
-  const message = {
-    author: { id: 'dm3', bot: false, username: 'Max' },
-    attachments: { values: () => [{ url: 'https://cdn.discordapp.com/attachments/1/3/gros.png', content_type: 'image/png', size: 20 * 1024 * 1024 }] },
-    async reply(p) { reponse = p; return {}; },
-  };
-  await choixFond.traiterMp(message);
-  assert.ok(/trop lourde|illisible/.test(reponse.content), reponse && reponse.content);
-  assert.strictEqual(stockage.reglages(G3).bienvenue.fond, null);
-  choixFond.__enAttente.delete('dm3');
+test('image illisible → on prévient, rien d\u2019enregistré', async () => {
+  const G = 'G-REP-CASSE';
+  stockage.majReglages(G, { bienvenue: { fond: null } });
+  const original = img.chargerImage;
+  img.chargerImage = async () => Buffer.from("ceci n'est pas une image");
+  try {
+    choixFond.__enAttente.set('u', { guildId: G, messageId: 'm', prompt: null, expire: Date.now() + 60000 });
+    let note = null;
+    await choixFond.traiterReponse({
+      author: { id: 'u', bot: false }, guild: { id: G }, messageReference: { messageId: 'm' },
+      attachments: { values: () => [{ url: 'https://x/y.png', content_type: 'image/png', size: 1000 }] },
+      async reply(paquet) { note = paquet; },
+      async delete() {},
+    });
+    assert.ok(/pas réussi à lire/.test(note.content), note && note.content);
+    assert.strictEqual(stockage.reglages(G).bienvenue.fond, null);
+  } finally { img.chargerImage = original; choixFond.__enAttente.delete('u'); }
+});
+
+test('les autres messages du salon ne sont pas touchés (ni consommés, ni effacés)', async () => {
+  choixFond.__enAttente.set('u', { guildId: 'G-Y', messageId: 'msg-invite', prompt: null, expire: Date.now() + 60000 });
+  // auteur hors attente
+  assert.strictEqual(await choixFond.traiterReponse({
+    author: { id: 'quelquun-dautre', bot: false }, guild: { id: 'G-Y' },
+    attachments: { values: () => [] }, async reply() { throw new Error('ne doit pas répondre'); },
+  }), false, "le message d'un autre membre doit passer à la moderation normalement");
+  // bonne personne, mais ne répond pas au bon message
+  assert.strictEqual(await choixFond.traiterReponse({
+    author: { id: 'u', bot: false }, guild: { id: 'G-Y' }, messageReference: { messageId: 'autre-chose' },
+    attachments: { values: () => [] }, async reply() { throw new Error('ne doit pas répondre'); },
+  }), false, 'répondre à un autre message ne doit rien déclencher');
+  // message d'un bot
+  assert.strictEqual(await choixFond.traiterReponse({ author: { id: 'u', bot: true } }), false);
+  choixFond.__enAttente.delete('u');
 });
 
 test('attente expirée : plus personne en file au bout de 10 minutes', () => {
-  choixFond.__enAttente.set('dm4', { guildId: 'G-X', expire: Date.now() - 1 });
-  assert.strictEqual(choixFond.chercherEnAttente('dm4'), null);
+  choixFond.__enAttente.set('u', { guildId: 'G-X', messageId: 'm', prompt: null, expire: Date.now() - 1 });
+  assert.strictEqual(choixFond.chercherEnAttente('u'), null);
+  choixFond.__enAttente.delete('u');
 });
 
 module.exports = { nom: 'bienvenue-image', cas };

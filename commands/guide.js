@@ -36,6 +36,6 @@ module.exports = {
       .setDescription('Besoin d\'autre chose ? Tape `/ask` et demande-moi, je réponds avec le bon lien.')
       .addFields(champs);
 
-    return interaction.reply({ embeds: [carte], ephemeral: false }).catch(() => null);
+    return interaction.reply({ embeds: [carte] }).catch(() => null);
   },
 };

@@ -2,7 +2,7 @@
  * utils/panneaux.js — les réponses visuelles du bot.
  * Un seul style, en français, jamais de jargon technique à l'écran.
  */
-const { EmbedBuilder } = require('discord.js');
+const { EmbedBuilder, MessageFlags } = require('discord.js');
 
 const COULEUR = 0x5865f2;          // bleu Discord : sobre et lisible
 const COULEUR_OK = 0x3ba55d;
@@ -23,7 +23,8 @@ const erreur = (titre, description) => base(titre, description, COULEUR_ERREUR);
 
 /** Répond simplement, en gérant les deux cas (réponse ou suivi). */
 async function repondre(interaction, embed, options = {}) {
-  const paquet = { embeds: [embed], ephemeral: options.ephemere !== false };
+  const paquet = { embeds: [embed] };
+  if (options.ephemere !== false) paquet.flags = MessageFlags.Ephemeral;
   if (interaction.deferred || interaction.replied) {
     return interaction.followUp(paquet).catch(() => null);
   }

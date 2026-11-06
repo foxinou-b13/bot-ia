@@ -1,4 +1,5 @@
-const { SlashCommandBuilder, PermissionsBitField } = require('discord.js');
+const { SlashCommandBuilder, PermissionsBitField, MessageFlags,
+} = require('discord.js');
 const perms = require('../utils/permissions');
 const panneaux = require('../utils/panneaux');
 const { journaliser } = require('../utils/journal');
@@ -24,7 +25,7 @@ module.exports = {
 
     const nombre = interaction.options.getInteger('nombre');
     const filtre = interaction.options.getUser('membre');
-    await interaction.deferReply({ ephemeral: true });
+    await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
     const salon = interaction.channel;
     let supprimes = 0;

@@ -9,7 +9,7 @@
  * APERÇU réel de la carte, pour que l'admin voie tout de suite le résultat.
  */
 const {
-  SlashCommandBuilder, PermissionsBitField, AttachmentBuilder, EmbedBuilder,
+  SlashCommandBuilder, PermissionsBitField, AttachmentBuilder, EmbedBuilder, MessageFlags,
 } = require('discord.js');
 const perms = require('../utils/permissions');
 const panneaux = require('../utils/panneaux');
@@ -93,11 +93,11 @@ module.exports = {
       paquet = {
         embeds: [carte],
         files: [new AttachmentBuilder(png, { name: 'apercu-bienvenue.png' })],
-        ephemeral: true,
+        flags: MessageFlags.Ephemeral,
       };
     } catch {
       // l'enregistrement est fait ; l'aperçu seul peut rater, on le dit simplement
-      paquet = { content: '✅ Fond enregistré. (Impossible de générer l’aperçu ici, mais les cartes l’utiliseront.)', ephemeral: true };
+      paquet = { content: '✅ Fond enregistré. (Impossible de générer l’aperçu ici, mais les cartes l’utiliseront.)', flags: MessageFlags.Ephemeral };
     }
     return interaction.reply(paquet).catch(() => null);
   },
