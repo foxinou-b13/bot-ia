@@ -106,6 +106,25 @@ test('module insultes désactivé → insulte ignorée', () => {
   assert.strictEqual(r.action, 'aucune');
 });
 
-module.exports = { nom: 'automod', cas };
+test('variantes courantes : pluriels, féminin, formes verbales, mots collés à la ponctuation', () => {
+  assert.strictEqual(automod.insulteTrouvee(' Bande de connards !'), 'connard');
+  assert.strictEqual(automod.insulteTrouvee('espèce de connasse'), 'connasse');
+  assert.strictEqual(automod.insulteTrouvee('tous des enfoirés'), 'enfoire');
+  assert.strictEqual(automod.insulteTrouvee('_connard_'), 'connard');
+  assert.strictEqual(automod.insulteTrouvee('vas-y encule'), 'encule');
+  assert.strictEqual(automod.insulteTrouvee('les salopes'), 'salop');
+  assert.strictEqual(automod.insulteTrouvee('il me casse les couilles'), 'couille');
+  assert.strictEqual(automod.insulteTrouvee('VA  TE   FAIRE foutre'), 'va te faire');
+});
 
+test('toujours aucun faux positif sur les mots normaux', () => {
+  assert.strictEqual(automod.insulteTrouvee('la dispute est finie'), null);
+  assert.strictEqual(automod.insulteTrouvee('ce film est violent'), null);
+  assert.strictEqual(automod.insulteTrouvee('j\'habite à Valence'), null);
+  assert.strictEqual(automod.insulteTrouvee('une belle constitution'), null);
+  assert.strictEqual(automod.insulteTrouvee('un ordinateur'), null);
+});
+
+
+module.exports = { nom: 'automod', cas };
 if (require.main === module) require('./executeur')(module.exports);

@@ -10,6 +10,11 @@ const journal = require('../utils/journal');
 const ia = require('../utils/ia');
 const securite = require('../utils/securite-ia');
 const panneaux = require('../utils/panneaux');
+const sanctions = require('../utils/sanctions');
+
+// anti-inondation : un seul avertissement automatique par membre et par 5 minutes
+const DERNIER_AVERT = new Map();   // `guildId:userId` → horodatage
+const PAUSE_AVERT_MS = 5 * 60 * 1000;
 
 const historique = new Map();     // `${guildId}:${userId}` → [horodatages]
 
@@ -29,31 +34,65 @@ function dateLimite(seconde) {
 async function modererAutomatiquement(message, reglages) {
   const analyse = automod.analyser(message.content, { reglages });
 
-  if (analyse.action === 'supprimer') {
-    try {
-      await message.delete();
-    } catch {
-      return null;                     // pas la permission : on n'insiste pas
-    }
-    const avertissement = await message.channel.send({
-      embeds: [panneaux.attention('🛡️ Message supprimé',
-        `<@${message.author.id}>, ton message a été retiré : **${analyse.raison}**.`)],
-    }).catch(() => null);
+  if (analyse.action !== 'supprimer') return null;
 
-    if (avertissement && typeof avertissement.delete === 'function') {
-      setTimeout(() => avertissement.delete().catch(() => null), 8000);
-    }
-
-    await journal.journaliser(message.guild, {
-      type: 'auto', titre: '🛡️ Modération automatique',
-      cible: `${message.author.tag} (${message.author.id})`,
-      raison: analyse.raison,
-      details: message.content.slice(0, 500),
-    });
-    return analyse;
+  try {
+    await message.delete();
+  } catch {
+    return null;                     // pas la permission : on n'insiste pas
   }
 
-  return null;
+  // ─── la sanction promise par le panneau : avertissement + MP + seuil automatique ───
+  let note = `<@${message.author.id}>, ton message a été retiré : **${analyse.raison}**.`;
+  const cle = `${message.guild.id}:${message.author.id}`;
+  const maintenant = Date.now();
+  if (maintenant - (DERNIER_AVERT.get(cle) || 0) >= PAUSE_AVERT_MS) {
+    DERNIER_AVERT.set(cle, maintenant);
+    const liste = stockage.ajouterAvert(message.guild.id, message.author.id, {
+      raison: `Auto-modération : ${analyse.raison}`,
+      par: 'Otaku (automatique)',
+      date: maintenant,
+    });
+    const seuil = reglages.seuilAvert || 3;
+    note += ` Un **avertissement n°${liste.length}** t'a été ajouté`;
+    if (reglages.sanctionAuto) note += ` (à ${seuil}, c'est sourdine automatique)`;
+    note += '.';
+    const cible = message.member
+      || (message.guild.members?.fetch ? await message.guild.members.fetch(message.author.id).catch(() => null) : null);
+    if (cible) {
+      await sanctions.avertir(cible, {                       // MP (si accepté) + ligne au journal
+        raison: `Message retiré automatiquement : ${analyse.raison}`,
+        auteur: 'Auto-modération',
+        nombre: liste.length,
+      });
+      if (reglages.sanctionAuto && liste.length >= seuil) {
+        const minutes = reglages.dureeSanction || 60;
+        const muet = await sanctions.rendreMuet(cible, {     // MP + journal inclus dedans
+          raison: `Sanction automatique : ${liste.length} avertissements`,
+          auteur: `Automatique (seuil ${seuil})`,
+          ms: minutes * 60000,
+          dureeLisible: `${minutes} min`,
+        });
+        if (muet.ok) note += ` Et te voilà **en sourdine ${minutes} min**.`;
+      }
+    }
+  }
+
+  const avertissement = await message.channel.send({
+    embeds: [panneaux.attention('🛡️ Message supprimé', note)],
+  }).catch(() => null);
+
+  if (avertissement && typeof avertissement.delete === 'function') {
+    setTimeout(() => avertissement.delete().catch(() => null), 8000);
+  }
+
+  await journal.journaliser(message.guild, {
+    type: 'auto', titre: '🛡️ Modération automatique',
+    cible: `${message.author.tag} (${message.author.id})`,
+    raison: analyse.raison,
+    details: message.content.slice(0, 500),
+  });
+  return analyse;
 }
 
 module.exports = {

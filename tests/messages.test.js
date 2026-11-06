@@ -168,6 +168,36 @@ test('bienvenue désactivée : aucun message', async () => {
   assert.strictEqual(guilde.salonsDeTest.size, 0);
 });
 
-module.exports = { nom: 'messages', cas };
+test('insulte : avertissement auto enregistré, MP envoyé, et sourdine au seuil réglé', async () => {
+  const G = 'G-AUTO-SANCT';
+  stockage.majReglages(G, { automod: { insultes: true, sanctionAuto: true, seuilAvert: 2, dureeSanction: 30 } });
+  stockage.ajouterAvert(G, 'u-sanct', { raison: 'test précédent', par: 'staff', date: Date.now() - 60000 });
+  const message = messageFactice({ contenu: 'sale connasse', guildId: G, id: 'u-sanct' });
+  message.member = membreMock({ id: 'u-sanct', tag: 'Sanct#0001', permissions: [], sendEchoue: false });
+  await messageCreate.executer(client, message);
+  assert.strictEqual(message.supprime, true, 'le message est retiré');
+  assert.strictEqual(stockage.avertissements(G, 'u-sanct').length, 2, "l'avertissement automatique s'ajoute à la liste du membre");
+  const mp = message.member.actions.find((x) => x[0] === 'mp');
+  assert.ok(mp, 'la personne est prévenue en MP quand elle les accepte');
+  assert.ok(/avertissement/i.test(JSON.stringify(mp[1])), JSON.stringify(mp[1]));
+  const timeout = message.member.actions.find((x) => x[0] === 'timeout');
+  assert.ok(timeout, 'le seuil (2) est atteint → sourdine automatique');
+  assert.strictEqual(timeout[1], 30 * 60000, 'la durée vient du réglage du panneau');
+});
 
+test('anti-inondation : pas deux avertissements auto à cinq minutes d\u2019intervalle', async () => {
+  const G = 'G-AUTO-PAUSE';
+  stockage.majReglages(G, { automod: { insultes: true, sanctionAuto: false } });
+  const avant = stockage.avertissements(G, 'u-pause').length;
+  const m1 = messageFactice({ contenu: 'connard', guildId: G, id: 'u-pause' });
+  await messageCreate.executer(client, m1);
+  const m2 = messageFactice({ contenu: 'connards', guildId: G, id: 'u-pause' });
+  await messageCreate.executer(client, m2);
+  assert.strictEqual(m1.supprime, true);
+  assert.strictEqual(m2.supprime, true, 'les deux messages sont bien retirés');
+  assert.strictEqual(stockage.avertissements(G, 'u-pause').length, avant + 1, 'mais un seul avertissement sur la fenêtre de 5 min');
+});
+
+
+module.exports = { nom: 'messages', cas };
 if (require.main === module) require('./executeur')(module.exports);

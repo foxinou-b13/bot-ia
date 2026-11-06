@@ -4,14 +4,17 @@
  */
 const { config } = require('../config');
 
-// ─── insultes (français courant, sans les pires : on reste utilisable) ───
+// ─── insultes (racines ascii : le texte est normalisé avant comparaison) ───
 const INSULTES = [
-  'abruti', 'abrutie', 'batard', 'bâtard', 'bouffon', 'connard', 'connarde',
-  'conne', 'cretin', 'crétin', 'crétine', 'debile', 'débile', 'encule', 'enculé',
-  'enculer', 'fdp', 'ferme ta gueule', 'ftg', 'merdeux', 'nique', 'niquer',
-  'ntm', 'pd', 'putain', 'pute', 'salope', 'salaud', 'sg', 'suce', 'tg',
-  'ta gueule', 'trouduc', 'va te faire', 'viol', 'zgueg',
+  'abruti', 'abrutie', 'batard', 'bouffon', 'connard', 'connasse', 'conne',
+  'cretin', 'debile', 'encule', 'fdp', 'ferme ta gueule', 'ftg', 'merdeux',
+  'nique', 'ntm', 'pd', 'putain', 'pute', 'pute', 'salop', 'salaud', 'sg',
+  'suce', 'tg', 'ta gueule', 'trouduc', 'va te faire', 'viol', 'zgueg',
+  'bite', 'couille', 'enfoire', 'petasse', 'trou du cul', 'fils de pute', 'fille de pute',
 ];
+
+// Terminaisons tolérées autour d'une racine : pluriels, féminin, formes verbales.
+const VARIANTS = ['s', 'es', 'er', 'r', 'ez', 'ee', 'ees', 'eur', 'euse', 'euses'];
 
 // ─── liens autorisés / motif ───
 const INVITATION = /(?:discord\.(?:gg|me|io)|discordapp\.com\/invite|discord\.com\/invite)\/[a-z0-9-]+/i;
@@ -69,16 +72,24 @@ function compteLiens(texte) {
   return trouve ? trouve.length : 0;
 }
 
-/** Renvoie l'insulte trouvée, ou null. */
+/** Renvoie la racine d'insulte trouvée, ou null. Gère pluriels/féminin/verbes sans faux positifs. */
 function insulteTrouvee(texte) {
   const propre = normaliser(texte);
   if (!propre) return null;
   const mots = propre.split(' ');
-  for (const insulte of INSULTES) {
-    if (insulte.includes(' ')) {
-      if (propre.includes(insulte)) return insulte;
-    } else if (mots.includes(insulte)) {
-      return insulte;
+  for (const racine of INSULTES) {
+    if (racine.includes(' ')) {                       // expression en plusieurs mots
+      if (propre.includes(racine)) return racine;
+      continue;
+    }
+    if (racine.length < 4) {                          // sigles (fdp, ntm…) : mot entier seulement
+      if (mots.includes(racine)) return racine;
+      continue;
+    }
+    for (const mot of mots) {
+      if (mot === racine) return racine;
+      if (mot.startsWith(racine) && VARIANTS.includes(mot.slice(racine.length))) return racine;
+      if (racine.length >= 5 && mot.endsWith(racine) && VARIANTS.includes(mot.slice(0, mot.length - racine.length))) return racine;
     }
   }
   return null;

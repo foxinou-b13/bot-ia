@@ -29,7 +29,7 @@ const MESSAGE_DEFAUT = 'Bienvenue {membre} sur **{serveur}** ! Tu es notre {nomb
 const MODULES = {
   spam: { nom: 'Spam', emoji: '🐢', aide: 'Trop de messages d\'un coup' },
   liens: { nom: 'Liens et invitations', emoji: '🔗', aide: 'Invitations, arnaques nitro/steam, rafales de liens' },
-  insultes: { nom: 'Insultes', emoji: '🤬', aide: 'Gros mots, même déguisés (c0nnard)' },
+  insultes: { nom: 'Insultes', emoji: '🤬', aide: 'Gros mots, même déguisés, au pluriel ou au féminin' },
   majuscules: { nom: 'Majuscules', emoji: '🔠', aide: 'Messages écrits en gueulant' },
   raid: { nom: 'Raid', emoji: '🚨', aide: 'Arrivées massives soudaines' },
   sanctionAuto: { nom: 'Sanction automatique', emoji: '⚖️', aide: 'Mute auto après plusieurs avertissements' },
@@ -99,7 +99,7 @@ const RUBRIQUES = {
   automod: {
     label: '🛡️ Auto-modération',
     aide: 'Spam, liens, insultes, majuscules, raid',
-    intro: 'Otaku filtre tout seul les comportements problématiques. Active ou non chaque module — la liste est sur sa carte.',
+    intro: 'Otaku filtre tout seul les comportements problématiques. Chaque message retiré ajoute un avertissement, notifie la personne en MP (si elle les accepte) et applique la sourdine au seuil réglé dans ⚖️ Sanctions.',
     items: {
       modules: {
         label: '🧰 Modules de filtrage',
@@ -118,7 +118,7 @@ const RUBRIQUES = {
     items: {
       formule: {
         label: '⚙️ Formule de la sanction',
-        desc: 'Combien d\'avertissements avant la sourdine, et pour combien de temps. « Désactiver » laisse les /warn seuls, sans mute automatique.',
+        desc: 'Combien d\'avertissements avant la sourdine, et pour combien de temps. Le seuil compte les /warn du staff ET les avertissements automatiques de l\'auto-modération (insulte ou lien retiré). « Désactiver » garde les retraits de messages, sans sourdine automatique.',
       },
     },
   },
