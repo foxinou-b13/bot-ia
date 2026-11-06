@@ -23,7 +23,7 @@ const ia = require('../utils/ia');
 const bienvenueImage = require('../utils/bienvenue-image');
 
 const COULEUR = 0x5865f2;
-const MESSAGE_DEFAUT = 'Bienvenue {membre} sur **{serveur}** ! Tu es notre {nombre}e membre.';
+const MESSAGE_DEFAUT = 'Bienvenue {membre} sur **{serveur}** !';
 
 // ─── les modules de l'auto-mod ───
 const MODULES = {
@@ -68,7 +68,7 @@ const RUBRIQUES = {
       },
       message: {
         label: '✏️ Message d\'accroche',
-        desc: 'Un petit texte écrit par-dessus la carte, si tu veux ajouter quelque chose (facultatif).\nLes mots-clés sont remplacés tout seuls : `{membre}` = la mention du nouveau, `{serveur}` = le nom du serveur, `{nombre}` = son rang d\'arrivée.',
+        desc: 'Un petit texte écrit par-dessus la carte, si tu veux ajouter quelque chose (facultatif).\nLes mots-clés sont remplacés tout seuls : `{membre}` = la mention du nouveau, `{serveur}` = le nom du serveur.',
       },
       couper: {
         label: '🔕 Couper l\'accueil',
@@ -522,7 +522,7 @@ module.exports = {
       const modal = new ModalBuilder().setCustomId('cfg:accueil:msg-modal').setTitle('✏️ Message de bienvenue');
       const champ = new TextInputBuilder()
         .setCustomId('message').setLabel('Ton message d\'accueil')
-        .setPlaceholder('{membre} · {serveur} · {nombre} sont remplacés automatiquement')
+        .setPlaceholder('{membre} · {serveur} sont remplacés automatiquement')
         .setStyle(TextInputStyle.Paragraph).setMaxLength(500).setRequired(true)
         .setValue(String(actuelle).slice(0, 500));
       modal.addComponents(new ActionRowBuilder().addComponents(champ));

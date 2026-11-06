@@ -98,7 +98,6 @@ module.exports = {
       .setColor(0x5865f2)
       .setTitle(`👋 Bienvenue sur ${guild.name} !`);
     carte.setDescription(texte);
-    if (nombre) carte.addFields({ name: '👥 Nouvel arrivant', value: `Tu es le **${nombre}ᵉ membre** du serveur.` });
     if (role) carte.addFields({ name: '🎟️ Accès', value: 'Le rôle du serveur t\'a été donné automatiquement — tu as accès aux salons.', inline: true });
 
     try {
