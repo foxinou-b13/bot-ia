@@ -171,12 +171,12 @@ test('bienvenue désactivée : aucun message', async () => {
 test('insulte : avertissement auto enregistré, MP envoyé, et sourdine au seuil réglé', async () => {
   const G = 'G-AUTO-SANCT';
   stockage.majReglages(G, { automod: { insultes: true, sanctionAuto: true, seuilAvert: 2, dureeSanction: 30 } });
-  stockage.ajouterAvert(G, 'u-sanct', { raison: 'test précédent', par: 'staff', date: Date.now() - 60000 });
+  const avant = stockage.avertissements(G, 'u-sanct').length;   // la liste peut déjà porter des runs précédents
   const message = messageFactice({ contenu: 'sale connasse', guildId: G, id: 'u-sanct' });
   message.member = membreMock({ id: 'u-sanct', tag: 'Sanct#0001', permissions: [], sendEchoue: false });
   await messageCreate.executer(client, message);
   assert.strictEqual(message.supprime, true, 'le message est retiré');
-  assert.strictEqual(stockage.avertissements(G, 'u-sanct').length, 2, "l'avertissement automatique s'ajoute à la liste du membre");
+  assert.strictEqual(stockage.avertissements(G, 'u-sanct').length, avant + 1, "l'avertissement automatique s'ajoute à la liste du membre");
   const mp = message.member.actions.find((x) => x[0] === 'mp');
   assert.ok(mp, 'la personne est prévenue en MP quand elle les accepte');
   assert.ok(/avertissement/i.test(JSON.stringify(mp[1])), JSON.stringify(mp[1]));
