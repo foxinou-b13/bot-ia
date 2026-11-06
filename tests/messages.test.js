@@ -130,12 +130,17 @@ test('bienvenue : message envoyé avec les variables remplacées', async () => {
   membre.guild = guilde;
   await guildMemberAdd.executer(client, membre);
 
-  // Comportement actuel : la CARTE-IMAGE prime (PNG joint + mention ping).
+  // La carte-image part DANS une carte : ping + texte perso + PNG dans le même embed.
   const paquet = salon.messagesEnvoyes[0] || {};
   assert.ok(paquet.files?.length, 'aucune image de bienvenue envoyée');
-  assert.ok(String(paquet.content).includes('<@nouveau1>'), 'le nouveau doit être pingué sur l\'image');
   const binaire = paquet.files[0].attachment;
   assert.ok(Buffer.isBuffer(binaire) && binaire[0] === 0x89, 'le fichier doit être un PNG');
+  assert.ok(!paquet.content, 'plus rien hors carte : le ping est dans la carte');
+  const json = paquet.embeds[0].toJSON();
+  assert.strictEqual(json.image.url, 'attachment://bienvenue.png', 'l\'image est dans la carte');
+  assert.ok(json.description.includes('<@nouveau1>'), 'le nouveau est pingué dans la carte');
+  assert.ok(json.description.includes('Otaku Land'), 'les variables {serveur} sont remplacées');
+  assert.ok(/le \d+e\./.test(json.description), 'la variable {nombre} est remplacée');
 });
 
 test('bienvenue : si l\'image ne peut pas être générée → carte texte en repli', async () => {

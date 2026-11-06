@@ -63,7 +63,7 @@ module.exports = {
 
     const nombre = guild.memberCount || 0;
 
-    // ─── 1ᵉʳ choix : la grande carte-image (fond de l'admin + avatar + ping) ───
+    // ─── 1ᵉʳ choix : la grande carte-image, dans une vraie carte (ping + texte + PNG ensemble) ───
     try {
       const png = await bienvenueImage.generer({
         fondUrl: reglages.bienvenue.fond || null,
@@ -73,8 +73,16 @@ module.exports = {
         pseudo: membre.user?.username || 'nouveau membre',
         langue: reglages.bienvenue.langue || 'fr',
       });
+      // le message perso de l'admin s'affiche ENFIN aussi avec la carte-image ;
+      // et quoi qu'il écrive, le ping du nouveau est garanti dans la carte.
+      const texte = texteBienvenue(message || 'Bienvenue {membre} sur **{serveur}** !', membre, guild, nombre);
+      const carte = new EmbedBuilder()
+        .setColor(0x5865f2)
+        .setTitle(`👋 Bienvenue sur ${guild.name} !`)
+        .setDescription(texte.includes(`<@${membre.id}>`) ? texte : `<@${membre.id}> ${texte}`)
+        .setImage('attachment://bienvenue.png');
       await cible.send({
-        content: `<@${membre.id}>`,
+        embeds: [carte],
         files: [{ name: 'bienvenue.png', attachment: png }],
         allowedMentions: { users: [membre.id] },
       });
