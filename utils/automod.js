@@ -4,17 +4,31 @@
  */
 const { config } = require('../config');
 
-// ─── insultes (racines ascii : le texte est normalisé avant comparaison) ───
+// ─── insultes : racines ascii (texte normalisé avant comparaison). FR + EN + abréviations SMS. ───
+// Choix mûrs : rien qui soit un mot courant (« retard » = retard de bus en français,
+// « douche » = la douche, « violent », « coucou »… — tous écartés, vérifiés en test).
 const INSULTES = [
-  'abruti', 'abrutie', 'batard', 'bouffon', 'connard', 'connasse', 'conne',
-  'cretin', 'debile', 'encule', 'fdp', 'ferme ta gueule', 'ftg', 'merdeux',
-  'nique', 'ntm', 'pd', 'putain', 'pute', 'pute', 'salop', 'salaud', 'sg',
-  'suce', 'tg', 'ta gueule', 'trouduc', 'va te faire', 'viol', 'zgueg',
-  'bite', 'couille', 'enfoire', 'petasse', 'trou du cul', 'fils de pute', 'fille de pute',
+  // français
+  'abruti', 'abrutie', 'andouille', 'batard', 'batarde', 'bite', 'bouffon', 'connard',
+  'connasse', 'connerie', 'conne', 'couille', 'cretin', 'debile', 'emmerde', 'encule',
+  'enfoire', 'enflure', 'fdp', 'ferme ta gueule', 'ftg', 'gatte', 'idiot', 'imbecile',
+  'lopette', 'merdeux', 'mrd', 'nique', 'shitty', 'nq', 'ntm', 'pd', 'pede',
+  'pedophile', 'pedo', 'petasse', 'putain', 'pute', 'ptn', 'ptnk', 'sg', 'suce', 'salop',
+  'salaud', 'ta gueule', 'teub', 'teubon', 'tg', 'trouduc', 'trouducul', 'va te faire',
+  'viol', 'violeur', 'zgueg', 'zob',
+  // expressions
+  'fils de pute', 'fille de pute', 'trou du cul', 'vas y encule', 'sale ordure', 'sales ordures',
+  // anglais (les mêmes mots reviennent dans les serves FR gaming)
+  'arse', 'arsehole', 'asshole', 'asshat', 'asswipe', 'bastard', 'bitch', 'btch',
+  'bullshit', 'cunt', 'dick', 'dickhead', 'dickwad', 'dipshit', 'douchebag', 'dumbass',
+  'fuck', 'fucking', 'fucker', 'fucking', 'shitting', 'motherfuck', 'jackass', 'kys', 'kill yourself', 'loser',
+  'moron', 'nigga', 'nigger', 'fag', 'faggot', 'nonce', 'prick', 'retarded', 'scumbag',
+  'shit', 'shithead', 'skank', 'slut', 'spic', 'tosser', 'tranny', 'turd', 'twat',
+  'wanker', 'whore',
 ];
 
 // Terminaisons tolérées autour d'une racine : pluriels, féminin, formes verbales.
-const VARIANTS = ['s', 'es', 'er', 'r', 'ez', 'ee', 'ees', 'eur', 'euse', 'euses'];
+const VARIANTS = ['s', 'es', 'ed', 'er', 'r', 'ers', 'ez', 'ee', 'ees', 'eur', 'euse', 'euses'];
 
 // ─── liens autorisés / motif ───
 const INVITATION = /(?:discord\.(?:gg|me|io)|discordapp\.com\/invite|discord\.com\/invite)\/[a-z0-9-]+/i;

@@ -131,15 +131,18 @@ test('/config : refusé sans la permission Gérer le serveur', async () => {
   assert.ok(/Gérer le serveur/.test(texteReponses(inter)));
 });
 
-test('/config : le menu des modules contient les 6 réglages', async () => {
+test('/config : le menu des modules contient les 5 réglages (la sanction se gère dans sa carte)', async () => {
   const carte = config.carteReglage(G, 'automod', 'modules', null, null);
   const menu = carte.components[0].toJSON().components[0];
   assert.strictEqual(menu.custom_id, 'cfg:modules');
-  assert.strictEqual(menu.options.length, 6, `${menu.options.length} options`);
-  for (const valeur of ['spam', 'liens', 'insultes', 'majuscules', 'raid', 'sanctionAuto']) {
+  assert.strictEqual(menu.options.length, 5, `${menu.options.length} options`);
+  for (const valeur of ['spam', 'liens', 'insultes', 'majuscules', 'raid']) {
     assert.ok(menu.options.some((o) => o.value === valeur), `${valeur} manquant`);
   }
+  assert.ok(!menu.options.some((o) => o.value === 'sanctionAuto'),
+    '« Sanction automatique » se règle désormais uniquement dans la carte ⚖️ (plus de double gestion)');
 });
+
 
 // ─────────── interactions du panneau ───────────
 test('menu Modules : décocher « spam » le désactive vraiment', async () => {

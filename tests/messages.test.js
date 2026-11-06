@@ -185,19 +185,34 @@ test('insulte : avertissement auto enregistré, MP envoyé, et sourdine au seuil
   assert.strictEqual(timeout[1], 30 * 60000, 'la durée vient du réglage du panneau');
 });
 
-test('anti-inondation : pas deux avertissements auto à cinq minutes d\u2019intervalle', async () => {
-  const G = 'G-AUTO-PAUSE';
+test('rafale d\u2019insultes : chaque retrait compte, un seul MP sur la fenêtre de 5 min', async () => {
+  const G = 'G-AUTO-RAFALE';
   stockage.majReglages(G, { automod: { insultes: true, sanctionAuto: false } });
-  const avant = stockage.avertissements(G, 'u-pause').length;
-  const m1 = messageFactice({ contenu: 'connard', guildId: G, id: 'u-pause' });
+  const id = 'u-rafale-' + Date.now();
+  const avant = stockage.avertissements(G, id).length;
+  const m1 = messageFactice({ contenu: 'connard', guildId: G, id });
+  m1.member = membreMock({ id, tag: 'Rale#0001', permissions: [], sendEchoue: false });
   await messageCreate.executer(client, m1);
-  const m2 = messageFactice({ contenu: 'connards', guildId: G, id: 'u-pause' });
+  const m2 = messageFactice({ contenu: 'connards', guildId: G, id });
+  m2.member = m1.member;
   await messageCreate.executer(client, m2);
   assert.strictEqual(m1.supprime, true);
-  assert.strictEqual(m2.supprime, true, 'les deux messages sont bien retirés');
-  assert.strictEqual(stockage.avertissements(G, 'u-pause').length, avant + 1, 'mais un seul avertissement sur la fenêtre de 5 min');
+  assert.strictEqual(m2.supprime, true);
+  assert.strictEqual(stockage.avertissements(G, id).length, avant + 2, 'les deux retraits sont comptés');
+  const mps = m1.member.actions.filter((x) => x[0] === 'mp').length;
+  assert.strictEqual(mps, 1, 'un seul MP sur la fenêtre anti-spam');
 });
 
+test('MP impossible : le bot le dit dans la note au lieu de le taire', async () => {
+  const G = 'G-AUTO-MPKO';
+  stockage.majReglages(G, { automod: { insultes: true, sanctionAuto: false } });
+  const id = 'u-mpko-' + Date.now();
+  const m = messageFactice({ contenu: 'sale pute', guildId: G, id });
+  m.member = membreMock({ id, tag: 'Ko#0001', permissions: [] });   // MP fermés par défaut du mock
+  await messageCreate.executer(client, m);
+  const note = m.channel.messagesEnvoyes.at(-1);
+  assert.ok(/MP/.test(JSON.stringify(note)), JSON.stringify(note).slice(0, 300));
+});
 
 module.exports = { nom: 'messages', cas };
 if (require.main === module) require('./executeur')(module.exports);

@@ -126,5 +126,30 @@ test('toujours aucun faux positif sur les mots normaux', () => {
 });
 
 
+test('insultes anglaises courantes dans les serves de jeu', () => {
+  assert.strictEqual(automod.insulteTrouvee('what the fuck'), 'fuck');
+  assert.strictEqual(automod.insulteTrouvee('you fucking loser'), 'fucking');
+  assert.strictEqual(automod.insulteTrouvee('you fucking bitch'), 'bitch'); // la liste répond à la première racine trouvée
+  assert.strictEqual(automod.insulteTrouvee('total dipshit moment'), 'dipshit');
+  assert.strictEqual(automod.insulteTrouvee('shitty day'), 'shitty');
+  assert.strictEqual(automod.insulteTrouvee('go away loser'), 'loser');
+  assert.strictEqual(automod.insulteTrouvee('you piece of shit'), 'shit');
+});
+
+test('abréviations SMS françaises (mrd, ptn, ftg, pd…)', () => {
+  assert.strictEqual(automod.insulteTrouvee('mrd toi'), 'mrd');
+  assert.strictEqual(automod.insulteTrouvee("ptn c'est fini"), 'ptn');
+  assert.strictEqual(automod.insulteTrouvee('ftg'), 'ftg');
+  assert.strictEqual(automod.insulteTrouvee('bande de pd'), 'pd');
+});
+
+test('le vocabulaire du quotidien ne tombe jamais dans le panneau', () => {
+  assert.strictEqual(automod.insulteTrouvee('j\'ai du retard dans mes devoirs'), null);
+  assert.strictEqual(automod.insulteTrouvee('on sort les ordures ménagères'), null);
+  assert.strictEqual(automod.insulteTrouvee('je prends ma douche puis au dodo'), null);
+  assert.strictEqual(automod.insulteTrouvee('une bonne connexion internet'), null);
+  assert.strictEqual(automod.insulteTrouvee('ce film est violent et les_connards_dans_la_salle rient'), 'connard');
+});
+
 module.exports = { nom: 'automod', cas };
 if (require.main === module) require('./executeur')(module.exports);

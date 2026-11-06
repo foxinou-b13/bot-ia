@@ -32,7 +32,6 @@ const MODULES = {
   insultes: { nom: 'Insultes', emoji: '🤬', aide: 'Gros mots, même déguisés, au pluriel ou au féminin' },
   majuscules: { nom: 'Majuscules', emoji: '🔠', aide: 'Messages écrits en gueulant' },
   raid: { nom: 'Raid', emoji: '🚨', aide: 'Arrivées massives soudaines' },
-  sanctionAuto: { nom: 'Sanction automatique', emoji: '⚖️', aide: 'Mute auto après plusieurs avertissements' },
 };
 
 /**

@@ -12,9 +12,11 @@ const securite = require('../utils/securite-ia');
 const panneaux = require('../utils/panneaux');
 const sanctions = require('../utils/sanctions');
 
-// anti-inondation : un seul avertissement automatique par membre et par 5 minutes
-const DERNIER_AVERT = new Map();   // `guildId:userId` → horodatage
-const PAUSE_AVERT_MS = 5 * 60 * 1000;
+// anti-spam de MP : on notifie la personne en privé au plus une fois toutes les
+// 5 minutes — mais CHAQUE retrait compte dans ses avertissements (le seuil reste
+// atteignable même en cas de rafale d'insultes).
+const DERNIER_MP = new Map();    // `guildId:userId` → horodatage du dernier MP envoyé
+const PAUSE_MP_MS = 5 * 60 * 1000;
 
 const historique = new Map();     // `${guildId}:${userId}` → [horodatages]
 
@@ -42,39 +44,50 @@ async function modererAutomatiquement(message, reglages) {
     return null;                     // pas la permission : on n'insiste pas
   }
 
-  // ─── la sanction promise par le panneau : avertissement + MP + seuil automatique ───
+  // ─── la sanction promise par le panneau : avertissement compté + MP + seuil automatique ───
   let note = `<@${message.author.id}>, ton message a été retiré : **${analyse.raison}**.`;
   const cle = `${message.guild.id}:${message.author.id}`;
   const maintenant = Date.now();
-  if (maintenant - (DERNIER_AVERT.get(cle) || 0) >= PAUSE_AVERT_MS) {
-    DERNIER_AVERT.set(cle, maintenant);
-    const liste = stockage.ajouterAvert(message.guild.id, message.author.id, {
-      raison: `Auto-modération : ${analyse.raison}`,
-      par: 'Otaku (automatique)',
-      date: maintenant,
-    });
-    const seuil = reglages.seuilAvert || 3;
-    note += ` Un **avertissement n°${liste.length}** t'a été ajouté`;
-    if (reglages.sanctionAuto) note += ` (à ${seuil}, c'est sourdine automatique)`;
-    note += '.';
-    const cible = message.member
-      || (message.guild.members?.fetch ? await message.guild.members.fetch(message.author.id).catch(() => null) : null);
-    if (cible) {
-      await sanctions.avertir(cible, {                       // MP (si accepté) + ligne au journal
+  const liste = stockage.ajouterAvert(message.guild.id, message.author.id, {
+    raison: `Auto-modération : ${analyse.raison}`,
+    par: 'Otaku (automatique)',
+    date: maintenant,
+  });
+  const seuil = reglages.seuilAvert || 3;
+  note += ` Avertissement n°${liste.length} enregistré`;
+  if (reglages.sanctionAuto) note += ` (sourdine automatique à ${seuil})`;
+  note += '.';
+  const cible = message.member
+    || (message.guild.members?.fetch ? await message.guild.members.fetch(message.author.id).catch(() => null) : null);
+  if (cible) {
+    const peutMp = maintenant - (DERNIER_MP.get(cle) || 0) >= PAUSE_MP_MS;
+    if (peutMp) {
+      DERNIER_MP.set(cle, maintenant);
+      const recu = await sanctions.avertir(cible, {                       // MP (si accepté) + ligne au journal
         raison: `Message retiré automatiquement : ${analyse.raison}`,
         auteur: 'Auto-modération',
         nombre: liste.length,
       });
-      if (reglages.sanctionAuto && liste.length >= seuil) {
-        const minutes = reglages.dureeSanction || 60;
-        const muet = await sanctions.rendreMuet(cible, {     // MP + journal inclus dedans
-          raison: `Sanction automatique : ${liste.length} avertissements`,
-          auteur: `Automatique (seuil ${seuil})`,
-          ms: minutes * 60000,
-          dureeLisible: `${minutes} min`,
-        });
-        if (muet.ok) note += ` Et te voilà **en sourdine ${minutes} min**.`;
+      if (recu && recu.mp === false) {
+        note += ' Impossible de t\u2019écrire en MP (réglages de confidentialité fermés) : le staff voit tout au journal.';
       }
+    } else {
+      await journal.journaliser(message.guild, {
+        type: 'warn', titre: '⚠️ Avertissement automatique',
+        cible: `${message.author.tag} (${message.author.id})`,
+        raison: `${analyse.raison} — n°${liste.length} (MP en pause anti-spam de 5 min)`,
+      });
+    }
+    if (reglages.sanctionAuto && liste.length >= seuil) {
+      const minutes = reglages.dureeSanction || 60;
+      const muet = await sanctions.rendreMuet(cible, {                   // MP + journal inclus dedans
+        raison: `Sanction automatique : ${liste.length} avertissements`,
+        auteur: `Automatique (seuil ${seuil})`,
+        ms: minutes * 60000,
+        dureeLisible: `${minutes} min`,
+      });
+      if (muet.ok) note += ` Te voilà **en sourdine ${minutes} min**.`;
+      else note += ` (sourdine impossible : ${muet.erreur || 'rôle du bot trop bas dans la liste'})`;
     }
   }
 
