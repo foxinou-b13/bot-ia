@@ -267,6 +267,12 @@ test('bouton 📱 : le bot poste une invitation dans le salon et attend la répo
   assert.strictEqual(mpTente, false, 'le bot ne doit JAMAIS écrire en MP');
   const note = inter.journal.find(([t]) => t === 'update')[1];
   assert.ok(/réponds au message du bot/.test(JSON.stringify(note)), 'la carte doit guider vers la réponse');
+
+  // double clic : pas d'avalanche de messages — on renvoie vers l'invitation déjà là
+  await config.composant(inter);
+  assert.strictEqual(invitations.length, 1, 'un double clic ne doit pas poster deux invitations');
+  const note2 = inter.journal.filter(([t]) => t === 'update').at(-1)[1];
+  assert.ok(/déjà/.test(JSON.stringify(note2)), JSON.stringify(note2));
   choixFond.__enAttente.clear();
 });
 

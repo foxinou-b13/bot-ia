@@ -116,6 +116,35 @@ test('le dossier data est ignoré par git (pas de fuite de données membres)', (
   assert.ok(ignore.includes('data/*.json'), 'les données ne sont pas ignorées');
 });
 
-module.exports = { nom: 'securite', cas };
+test('utils/garde-ip : bloque au-delà du quota, laisse repasser après la fenêtre', async () => {
+  const { creerLimite } = require('../utils/garde-ip');
+  const garde = creerLimite({ max: 3, fenetreMs: 60 });
+  assert.strictEqual(garde.Etat('1.2.3.4').bloque, false);
+  assert.strictEqual(garde.Etat('1.2.3.4').bloque, false);
+  assert.strictEqual(garde.Etat('1.2.3.4').bloque, false);
+  const quatrieme = garde.Etat('1.2.3.4');
+  assert.strictEqual(quatrieme.bloque, true, 'le 4e coup de la même IP doit être refusé');
+  assert.ok(quatrieme.resteSecondes >= 0);
+  assert.strictEqual(garde.Etat('9.9.9.9').bloque, false, 'une autre IP n est pas punie');
+  await new Promise((r) => setTimeout(r, 90));   // fenêtre de 60 ms : tout est purgé
+  assert.strictEqual(garde.Etat('1.2.3.4').bloque, false, 'la limite est glissante, pas perpétuelle');
+});
 
+test('index.js : /test-ia et /diagnostic sont verrouillables et limités, /health minimaliste', () => {
+  const code = lireFichier('index.js');
+  assert.ok(/JETON_SANTE|sante\.jeton/.test(code), 'les endpoints doivent accepter le jeton privé');
+  assert.ok(/gardeTestIA/.test(code), 'le test IA doit être limité par IP');
+  assert.ok(/429/.test(code), 'un refus trop-tôt doit exister (429)');
+  assert.ok(!/details: erreur\.details/.test(code), 'le détail des erreurs IA ne doit plus fuiter vers le web');
+  assert.ok(!/bot: client\.user/.test(code), 'le tag du bot ne doit plus être exposé sur /health');
+});
+
+test('README : le lien d\u2019install recommandé ne demande plus Administrateur', () => {
+  const readme = lireFichier('README.md');
+  assert.ok(/permissions=1099914407126/.test(readme), 'le lien minimal doit être documenté');
+  assert.ok(/Recommand/.test(readme), 'et présenté comme le choix recommandé');
+});
+
+
+module.exports = { nom: 'securite', cas };
 if (require.main === module) require('./executeur')(module.exports);

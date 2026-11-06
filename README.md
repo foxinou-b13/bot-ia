@@ -57,15 +57,44 @@ Developer Portal → ton application → **Bot** → tout en bas, cocher :
 
 puis **Save Changes**.
 
-**b. Inviter le bot** avec ce lien (remplace `BOT_ID` par l'Application ID) :
+**b. Inviter le bot** avec ce lien (remplace `BOT_ID` par l'Application ID).
+Deux choix — **le premier est recommandé** (le bot n'exige que ce dont il sert, pas les clés du royaume) :
 ```
+# Recommandé : modération + bienvenue + panneau, rien de plus
+https://discord.com/oauth2/authorize?client_id=BOT_ID&permissions=1099914407126&scope=bot%20applications.commands
+
+# Ou l'ancienne variante « tout pouvoir » (Administrateur) — plus simple, moins prudente :
 https://discord.com/oauth2/authorize?client_id=BOT_ID&permissions=8&scope=bot%20applications.commands
 ```
+> Mets les **mêmes permissions** dans le Developer Discord → *OAuth2 → URL Generator* / *Guild Install* : un bot volé avec « Administrateur » peut tout casser ; avec la liste courte, il ne peut « « que » modérer. »
 
 **c. Récupérer les clés IA gratuites** :
 - Gemini → <https://aistudio.google.com/apikey> → *Create API key*
 - Groq → <https://console.groq.com/keys> → *Create API Key*
 
+**d. Verrouiller le diagnostic (recommandé)** : dans Render → *Environment*, ajoute
+`JETON_SANTE` avec une phrase secrète inventée (ex. `chat-bleu-42-render`).
+Sans elle, `/test-ia` et `/diagnostic` restent actifs mais limités à 3 tests/heure
+par visiteur — tes clés IA coûtent de l'argent, on ne les laisse pas à l'encan.
+
+---
+
+## 🔒 Sécurité — ce qui est protégé, et ce qui dépend de toi
+
+Côté bot (déjà en place) :
+- **Aucun secret dans le code** : token, clés IA et base de données vivent uniquement dans les variables Render.
+- **Panneau /config et sanctions réservés au staff** (`Gérer le serveur`), vérifié deux fois (par Discord ET par le bot).
+- **Les MP ne sont jamais lus** : le bot les ignore complètement ; rien à cacher côté messages privés.
+- **Limites anti-inondation** : 6 questions IA/minute par membre, texte entré coupé à 1 500 caractères, formulaires à 500, images de fond ≤ 8 Mo vérifiées byte à byte.
+- **Endpoints de diagnostic verrouillables** (`JETON_SANTE`) et `/test-ia` limité à 3 appels/heure/IP par défaut ; le tag du bot n'est plus exposé sur `/health`.
+- **Fichiers supprimés automatiquement** : l'image de fond envoyée dans le salon est effacée juste après enregistrement (le CDN Discord purge de lui-même les pièces jointes des messages supprimés).
+
+Côté TOI (aucun code à toucher) :
+1. **Double authentification (2FA)** activée sur Discord, GitHub et Render. Un bot public se fait souvent copier ; tes comptes sont le vrai coffre.
+2. **Ne jamais coller le token du bot** dans un chat, un issue GitHub ou une capture. S'il fuit : Developer Portal → *Reset Token*, puis la nouvelle valeur dans Render.
+3. **Clé GitHub Personal Access Token** : si tu en as déjà partagé une quelque part (chat, capture…), régénère-la (Settings → Developer settings → *Tokens* → delete + create) et donne-moi seulement la nouvelle quand il faut pousser.
+4. **Clés IA** : Gemini et Groq ont des plafonds gratuits ; ajoute une alerte de dépassement dans leurs consoles si tu peux.
+5. Sur le serveur : garde **`@everyone` sans « Administrateur »**, et le **niveau de vérification** du serveur à *Moyen* minimum — ça coupe l'herbe sous le pied des raids de comptes neufs avant même que le bot ait à agir.
 ---
 
 ## 4. Installation sur Render (pas à pas)

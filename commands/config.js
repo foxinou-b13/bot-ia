@@ -443,6 +443,11 @@ module.exports = {
       // le 📎 natif ouvre la galerie du téléphone (ou les fichiers sur PC), le bot
       // range l'image puis efface les deux messages. Zéro MP, zéro trace, zéro URL.
       const choixFond = require('../utils/choix-fond');
+      // double clic ? on renvoie vers l'invitation déjà en cours, sans en poster une 2e
+      const enCours = choixFond.chercherEnAttente(interaction.user.id);
+      if (enCours && enCours.guildId === interaction.guildId) {
+        return montrer('⬆️ Ton invitation t’attend déjà dans le salon — réponds-lui avec ton image.');
+      }
       let invitation = null;
       try {
         invitation = await interaction.channel.send({

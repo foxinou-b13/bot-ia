@@ -69,7 +69,6 @@ const demarre = Date.now();
 function etatJson() {
   return {
     statut: 'ok',
-    bot: client.user ? client.user.tag : 'démarrage',
     connecte: client.isReady ? client.isReady() : false,
     serveurs: client.guilds?.cache?.size ?? 0,
     ping: client.ws?.ping ?? null,
@@ -81,6 +80,8 @@ function etatJson() {
 }
 
 function demarrerServeur() {
+  const { creerLimite } = require('./utils/garde-ip');
+  const gardeTestIA = creerLimite({ max: 3, fenetreMs: 60 * 60 * 1000 });   // 3 tests/heure/IP
   const serveur = http.createServer((requete, reponse) => {
     const url = (requete.url || '/').split('?')[0];
     if (url === '/health' || url === '/') {
@@ -88,21 +89,37 @@ function demarrerServeur() {
       reponse.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
       return reponse.end(corps);
     }
+    const { creerLimite, adresseIp } = require('./utils/garde-ip');
     if (url === '/test-ia') {
-      // Teste les vraies clés IA depuis le serveur : indispensable pour dépanner.
+      // Teste les vraies clés IA depuis le serveur. Coûte de l'argent réel à CHAQUE
+      // appel : réservé au propriétaire (JETON_SANTE), et sinon 3 tests/heure par IP.
+      const cleDemandee = new URL(url + (requete.url || '').slice(url.length), 'http://localhost').searchParams.get('jeton');
+      if (config.sante.jeton && cleDemandee !== config.sante.jeton) {
+        reponse.writeHead(403, { 'Content-Type': 'text/plain; charset=utf-8' });
+        return reponse.end('Jeton requis : ajoute ?jeton=… (valeur de JETON_SANTE dans Render).');
+      }
+      if (!config.sante.jeton && gardeTestIA(adresseIp(requete)).bloque) {
+        reponse.writeHead(429, { 'Content-Type': 'text/plain; charset=utf-8' });
+        return reponse.end('Trop de tests récemment (3/heure). Patiente un peu, ou renseigne JETON_SANTE dans Render.');
+      }
       const ia = require('./utils/ia');
       ia.demander({ systeme: 'Réponds en un mot.', messages: [{ role: 'user', contenu: 'Dis OK' }] })
         .then((r) => {
           reponse.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
           reponse.end(JSON.stringify({ ok: true, fournisseur: r.fournisseur, reponse: r.texte.slice(0, 200) }));
         })
-        .catch((erreur) => {
+        .catch(() => {
+          // jamais le détail de l'erreur en clair : il peut nommer des fournisseurs/clés
           reponse.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
-          reponse.end(JSON.stringify({ ok: false, erreur: erreur.message, details: erreur.details }, null, 2));
+          reponse.end(JSON.stringify({ ok: false, erreur: 'test impossible — vois les logs Render pour le détail' }));
         });
       return;
     }
     if (url === '/diagnostic') {
+      if (config.sante.jeton && new URL(requete.url, 'http://localhost').searchParams.get('jeton') !== config.sante.jeton) {
+        reponse.writeHead(403, { 'Content-Type': 'text/plain; charset=utf-8' });
+        return reponse.end('Jeton requis (JETON_SANTE).');
+      }
       const corps = JSON.stringify({
         ...etatJson(),
         commandes: [...client.commands.keys()].sort(),

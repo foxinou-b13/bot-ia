@@ -15,6 +15,13 @@ const config = {
   botId: process.env.BOT_ID || '',
   prefixe: process.env.PREFIXE || '!',
 
+  // ─── endpoints de diagnostic ───
+  sante: {
+    // Renseigne JETON_SANTE dans Render pour verrouiller /test-ia et /diagnostic
+    // (personne d'autre ne pourra brûler ton quota IA). Vide = limites horaires.
+    jeton: process.env.JETON_SANTE || '',
+  },
+
   // ─── IA ───
   gemini: {
     cle: process.env.GEMINI_API_KEY || '',
