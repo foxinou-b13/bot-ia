@@ -20,8 +20,8 @@ module.exports = {
     .setDefaultMemberPermissions(PermissionsBitField.Flags.ManageGuild)
     .addStringOption((o) => o
       .setName('module')
-      .setDescription('Lequel régler ? (ou « voir » pour l\'état complet)')
-      .setRequired(true)
+      .setDescription('Lequel régler ? (vide = voir l\'état complet)')
+      .setRequired(false)
       .addChoices(
         { name: 'Voir l\'état', value: 'voir' },
         { name: 'Spam', value: 'spam' },
@@ -53,28 +53,39 @@ module.exports = {
     const salon = interaction.options.getChannel('salon');
     const reglages = stockage.reglages(interaction.guildId);
 
-    if (module === 'voir') {
+    // `/automod` seul, ou avec « voir » : l'état complet — rien à choisir d'abord.
+    if (!module || module === 'voir') {
       const lignes = Object.entries(MODULES).map(([cle, libelle]) => (
         `${reglages.automod[cle] ? '✅' : '⬜'} ${libelle}`
       ));
       lignes.push(`\n${reglages.automod.salonExempt ? `🔕 Salon exempté : <#${reglages.automod.salonExempt}>` : '🔕 Aucun salon exempté'}`);
+      const sanction = reglages.automod.sanctionAuto
+        ? `⚖️ Sanction auto : **${reglages.automod.seuilAvert || 3}** avertissements → sourdine **${reglages.automod.dureeSanction || 60} min**`
+        : '⚖️ Sanction automatique : désactivée (les avertissements s\u2019empilent sans effet)';
       return panneaux.repondre(interaction, panneaux.info(
-        '🛡️ Modération automatique',
-        `${lignes.join('\n')}\n\n_Modifie avec \`/automod module:... etat:...\`_`,
+        '🛡️ Auto-modération — état',
+        `${lignes.join('\n')}\n\n${sanction}\n\n`
+        + '_Un réglage rapide, c\u2019est ici. Tout le détail (formule des sanctions, exemptions fines) se fait dans le panneau : **/config**._',
       ));
     }
 
     if (module === 'exempt') {
       if (!salon) {
-        return panneaux.oups(interaction, '❓ Salon manquant',
-          "Choisis un salon : `/automod module:Salon exempté salon:#le-salon` (ou aucun salon pour désactiver l'exemption).");
+        // Pas de salon = on retire l'exemption en place (propre, sans syntaxe à retenir).
+        if (!reglages.automod.salonExempt) {
+          return panneaux.repondre(interaction, panneaux.attention('ℹ️ Rien à retirer',
+            'Aucun salon n\u2019est exempté en ce moment. Choisis un salon avec le champ « salon » pour en exempter un.'));
+        }
+        stockage.majReglages(interaction.guildId, { automod: { salonExempt: null } });
+        return panneaux.ok(interaction, '✅ Exemption retirée',
+          'La modération automatique s\u2019applique de nouveau partout.');
       }
       const valeur = reglages.automod.salonExempt === salon.id ? null : salon.id;
       stockage.majReglages(interaction.guildId, { automod: { salonExempt: valeur } });
       return panneaux.ok(interaction, valeur ? '🔕 Salon exempté' : '✅ Exemption retirée',
         valeur
           ? `La modération automatique ne s'appliquera pas dans <#${salon.id}>.`
-          : `La modération automatique s'applique de nouveau partout.`);
+          : 'La modération automatique s’applique de nouveau partout.');
     }
 
     if (!etat) {

@@ -15,8 +15,11 @@ module.exports = {
       : 'aucune clé IA configurée';
 
     const description = [
+      '**ℹ️ Ce bot en bref**',
+      '`/aide` — cette liste, en privé (le salon d’accueil et les repères sont dans `/guide`)',
+      '',
       '**🤖 Intelligence artificielle**',
-      '`/ask` — pose une question, je réponds (mémoire du salon conservée)',
+      '`/ask` — pose une question, je réponds **dans ta langue** (mémoire du salon conservée)',
       'Mentionne-moi dans un message : je réponds pareil',
       '`/ia-reset` — j\'oublie la conversation en cours',
       '',
@@ -24,10 +27,11 @@ module.exports = {
       '`/ban` `/kick` `/mute` — sanctions',
       '`/warn` `/avertissements` `/avertissement-retirer` — suivi des avertissements',
       '`/clear` `/slowmode` `/lock` `/unlock` `/role` — gestion du salon',
+      '**📓 Journal du staff** — sanctions, auto-mod, messages supprimés/modifiés, départs : salon + contenu réglés dans `/config` → « Salons & repères »',
       '',
       '**⚙️ Réglages**',
       '`/config` — ⭐ LE PANNEAU : sections, menus déroulants, zéro saisie (auto-mod, salons, accueil, sanctions, IA)',
-      '`/automod` `/logs` — les réglages rapides, en commande directe',
+      '`/automod` `/logs` `/image-bienvenue` — réglages rapides, en commande directe',
       '',
       '**🔒 Tes données**',
       '`/donnees` — voir et effacer ce que le bot garde sur toi',

@@ -3,7 +3,7 @@
 Bot Discord en français, fait pour tourner **gratuitement** sur Render.
 Deux métiers :
 
-- **IA** : `/ask` ou une simple mention du bot → réponse en français, avec mémoire de la conversation.
+- **IA** : `/ask` ou une simple mention du bot → réponse **dans la langue de la question**, avec mémoire de la conversation et qui sait qui a dit quoi.
   Deux fournisseurs gratuits, bascule automatique : **Google Gemini** puis **Groq**.
 - **Modération** : sanctions, avertissements, nettoyage, verrouillage, auto-mod, logs, bienvenue.
 
@@ -32,7 +32,7 @@ Deux métiers :
 ## 2. Les commandes
 
 **IA**
-- `/ask question:` — pose une question
+- `/ask question:` — pose une question, l’IA répond dans la langue de la question
 - *mentionner le bot* — il répond aussi
 - `/ia-reset` — efface la mémoire du salon
 - `/aide` — liste tout
@@ -41,9 +41,10 @@ Deux métiers :
 - `/ban` `/kick` `/mute` — sanctions (l'utilisateur est prévenu en MP)
 - `/warn` `/avertissements` `/avertissement-retirer` — suivi des avertissements
 - `/clear` `/slowmode` `/lock` `/unlock` `/role` — gestion du salon
-- `/automod` — spam, invitations + liens, insultes, majuscules, raid, salon exempté
-- `/logs` — salon où sont notées les sanctions
-- `/bienvenue` — message d'accueil (`{membre}`, `{serveur}`, `{nombre}`)
+- `/automod` — tape-la seul pour voir l'état complet ; active ou coupe chaque module (spam, liens, insultes, majuscules, raid), gère le salon exempté
+- `Journal du staff` (réglé dans `/config` → « Salons & repères », contenu au choix) — note les sanctions, les alertes d'auto-modération, les messages supprimés, les messages modifiés (avant/après) et les départs de membres, avec alerte sur les comptes de moins de 7 jours
+- `/logs` — le salon du journal du staff (sanctions, auto-mod, suppressions, modifications, départs)
+- `/bienvenue` — message d'accueil (`{membre}`, `{serveur}`)
 
 ---
 

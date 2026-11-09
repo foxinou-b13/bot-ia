@@ -2,7 +2,8 @@ const { SlashCommandBuilder, PermissionsBitField, MessageFlags,
 } = require('discord.js');
 const perms = require('../utils/permissions');
 const panneaux = require('../utils/panneaux');
-const { journaliser } = require('../utils/journal');
+const journal = require('../utils/journal');
+const { journaliser } = journal;
 
 module.exports = {
   categorie: 'moderation',
@@ -43,9 +44,11 @@ module.exports = {
               `Je n'ai trouvé aucun message récent de **${filtre.tag}** dans ce salon.`)],
           }).catch(() => null);
         }
+        for (const m of aSupprimer) journal.taireMessage(m.id);   // ménage demandé : le journal ne répète pas ×50
         const resultat = await salon.bulkDelete(aSupprimer, true);
         supprimes = resultat.size;
       } else {
+        journal.taireSalon(salon.id);   // purge simple : quelques secondes de silence sur ce salon
         const resultat = await salon.bulkDelete(nombre, true);
         supprimes = resultat.size;
       }

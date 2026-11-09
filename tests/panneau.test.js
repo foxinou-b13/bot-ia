@@ -81,7 +81,7 @@ test('rubrique choisie : SA carte, avec un menu qui liste ses réglages (et rien
   assert.deepStrictEqual(json.map((c) => c.components[0].custom_id), ['cfg:item', 'cfg:racine'],
     'la carte rubrique = menu des réglages + bouton changer de rubrique, rien de mélangé');
   const opts = json[0].components[0].options.map((o) => o.value);
-  assert.deepStrictEqual(opts, ['salons:logs', 'salons:regles', 'salons:support']);
+  assert.deepStrictEqual(opts, ['salons:logs', 'salons:regles', 'salons:support', 'salons:journal']);
 });
 
 test('réglage choisi : sa carte propre avec SON seul contrôle + retour', async () => {
@@ -123,6 +123,36 @@ test('accueil : le menu de la carte contient bien les 6 réglages', () => {
   const menu = carte.components[0].toJSON().components[0];
   assert.deepStrictEqual(menu.options.map((o) => o.value),
     ['accueil:salon', 'accueil:role', 'accueil:langue', 'accueil:fond', 'accueil:message', 'accueil:couper']);
+});
+
+test('cartes de réglage propres : titre sans doublon, « \u{1F4CC} Valeur actuelle » uniforme, pied de carte, pas de mur de texte', () => {
+  for (const [sec, rub] of Object.entries(config.RUBRIQUES)) {
+    for (const cle of Object.keys(rub.items)) {
+      const embed = config.carteReglage(G, sec, cle, 'C1', null).embeds[0].toJSON();
+      assert.ok(!/  —  /.test(embed.title), `${sec}:${cle} : titre avec doublon`);
+      const attendu = `Otaku \u00b7 ${rub.label}`;
+      assert.ok(embed.footer && embed.footer.text === attendu, `${sec}:${cle} : pied de carte = ${embed.footer && embed.footer.text}`);
+      if (cle !== 'memo') {
+        const noms = (embed.fields || []).map((f) => f.name);
+        assert.ok(noms.includes('\u{1F4CC} Valeur actuelle'), `${sec}:${cle} : champ d'état unifié manquant (champs: ${noms.join('|')})`);
+        const valeur = (embed.fields.find((f) => f.name === '\u{1F4CC} Valeur actuelle') || {}).value || '';
+        assert.ok(!/\*[^*]+\*/.test(valeur.replace(/\*Standard :\*\n/, '')) || valeur.startsWith('*Standard'),
+          `${sec}:${cle} : ancien style *_italique_ d'état vide : ${valeur}`);
+      }
+      assert.ok((embed.description || '').length <= 700, `${sec}:${cle} : description de ${String((embed.description || '').length)} caractères (> 700)`);
+      for (const f of embed.fields || []) {
+        assert.ok(f.value.length <= 1024, `${sec}:${cle} : champ « ${f.name} » trop long (${f.value.length})`);
+      }
+    }
+  }
+});
+
+test('le fond de carte : explication en puces courtes, première ligne = résumé pour le menu', () => {
+  const desc = config.RUBRIQUES.accueil.items.fond.desc;
+  assert.ok(desc.length < 700, `mur de texte : ${desc.length} caractères`);
+  assert.ok(desc.split('\n').length >= 4, 'les puces ont disparu');
+  assert.ok(desc.split('\n')[0].length <= 80, 'la première ligne doit rester un résumé court');
+  for (const mot of ['aperçu', 'Adresse', 'par défaut']) assert.ok(desc.includes(mot), `info perdue : « ${mot} »`);
 });
 
 test('/config : refusé sans la permission Gérer le serveur', async () => {

@@ -12,7 +12,7 @@ module.exports = {
     .setDescription('Pose une question à l\'IA du serveur')
     .addStringOption((o) => o
       .setName('question')
-      .setDescription('Ta question, en français')
+      .setDescription('Ta question — l\u2019IA répond dans ta langue')
       .setMaxLength(1500)
       .setRequired(true)),
 
@@ -38,6 +38,9 @@ module.exports = {
       return panneaux.oups(interaction, '🛡️ Je ne peux pas répondre là-dessus', acces.raison);
     }
 
+    // ─── intelligence : l'IA répond dans la langue de la question ───
+    const langue = ia.detecterLangue(question);
+
     const limite = ia.tropRapide(interaction.user.id);
     if (limite.bloque) {
       return panneaux.oups(interaction, '⏳ Doucement',
@@ -53,9 +56,10 @@ module.exports = {
           pseudo: interaction.member?.displayName || interaction.user.username,
           consigneServeur: (stockage.reglages(interaction.guildId).ia || {}).consigne,
           guide: stockage.repereIA(interaction.guildId),
+          langue,
         }),
         messages: [
-          ...ia.memoire(interaction.guildId, interaction.channelId),
+          ...ia.historiquePourPrompt(interaction.guildId, interaction.channelId),
           { role: 'user', contenu: question },
         ],
       });
@@ -76,7 +80,8 @@ module.exports = {
       }
       texte = propre;
 
-      ia.memoriser(interaction.guildId, interaction.channelId, 'user', question);
+      ia.memoriser(interaction.guildId, interaction.channelId, 'user', question,
+        interaction.member?.displayName || interaction.user.username);
       ia.memoriser(interaction.guildId, interaction.channelId, 'assistant', texte);
 
       const morceaux = ia.decouper(texte);

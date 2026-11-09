@@ -34,6 +34,9 @@ const EVENEMENTS = [
   require('./events/interactionCreate'),
   require('./events/messageCreate'),
   require('./events/guildMemberAdd'),
+  require('./events/guildMemberRemove'),
+  require('./events/messageDelete'),
+  require('./events/messageUpdate'),
 ];
 
 /** Crée un client complet, avec ses commandes et ses événements. */

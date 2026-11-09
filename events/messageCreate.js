@@ -39,6 +39,7 @@ async function modererAutomatiquement(message, reglages) {
   if (analyse.action !== 'supprimer') return null;
 
   try {
+    journal.taireMessage(message.id);   // déjà raconté joliment ci-dessous : pas de double ligne
     await message.delete();
   } catch {
     return null;                     // pas la permission : on n'insiste pas
@@ -207,14 +208,16 @@ module.exports = {
           pseudo: message.member?.displayName || message.author.username,
           consigneServeur: (stockage.reglages(message.guild.id).ia || {}).consigne,
           guide: stockage.repereIA(message.guild.id),
+          langue: ia.detecterLangue(question),
         }),
         messages: [
-          ...ia.memoire(message.guild.id, message.channel.id),
+          ...ia.historiquePourPrompt(message.guild.id, message.channel.id),
           { role: 'user', contenu: question },
         ],
       });
 
-      ia.memoriser(message.guild.id, message.channel.id, 'user', question);
+      ia.memoriser(message.guild.id, message.channel.id, 'user', question,
+        message.member?.displayName || message.author.username);
       ia.memoriser(message.guild.id, message.channel.id, 'assistant', texte);
 
       // ─── filtrage SORTANT ───

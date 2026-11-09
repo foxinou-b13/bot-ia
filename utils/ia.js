@@ -155,6 +155,45 @@ async function demander(demande, options = {}) {
   return Promise.reject(erreur);
 }
 
+// ─────────────────────────── langues ───────────────────────────
+/**
+ * L'IA répond dans LA LANGUE de la question (le serveur reste francophone
+ * par défaut : courte question ambigüe → français).
+ */
+const LANGUES = { fr: 'français', en: 'anglais', es: 'espagnol', de: 'allemand', it: 'italien', pt: 'portugais', nl: 'néerlandais' };
+
+const INDICES_LANGUES = {
+  fr: ['le', 'la', 'les', 'un', 'une', 'des', 'est', 'suis', 'pour', 'avec', 'quoi', 'comment', 'pourquoi', 'quand', 'vous', 'tu', 'je', 'qui', 'sur', 'dans', 'pas', 'bonjour', 'merci', 'peux', 'veux', 'faire', 'aussi', 'comme', 'cette', 'nous', 'elle', 'il'],
+  en: ['the', 'is', 'are', 'you', 'what', 'how', 'why', 'when', 'please', 'hello', 'thanks', 'for', 'with', 'that', 'this', 'have', 'has', 'not', 'about', 'would', 'could', 'your', 'was', 'were', 'does', 'who', 'which', 'there', 'they', 'can', 'do'],
+  es: ['el', 'los', 'las', 'una', 'que', 'está', 'como', 'cuando', 'porque', 'hola', 'gracias', 'por', 'para', 'con', 'dónde', 'donde', 'también', 'tambien', 'muy', 'puedes', 'quiero', 'esto',
+        'bueno', 'buenas', 'días', 'dias', 'hoy', 'ahora', 'luego', 'pero', 'si', 'sí', 'tú', 'tu', 'yo', 'nosotros', 'vosotros', 'él', 'el', 'mi', 'me', 'te', 'se', 'es', 'son', 'hay', 'ha'],
+  de: ['der', 'die', 'das', 'und', 'ist', 'nicht', 'ein', 'eine', 'wie', 'was', 'warum', 'wann', 'bitte', 'danke', 'hallo', 'ich', 'du', 'wir', 'mit', 'für', 'auf', 'auch', 'sehr', 'kann', 'habe',
+        'geht', 'heute', 'dir', 'dein', 'deine', 'mein', 'meine', 'mich', 'dich', 'hier', 'dann', 'mal', 'schon', 'noch', 'aber', 'wenn', 'weil', 'man', 'nur', 'oder', 'sie', 'es', 'ja', 'nein', 'guten', 'tag', 'abends'],
+  it: ['gli', 'che', 'come', 'quando', 'perché', 'dove', 'sono', 'grazie', 'ciao', 'prego', 'molto', 'anche', 'perché', 'questa', 'questo', 'posso', 'vorrei', 'come', 'stato'],
+  pt: ['você', 'voce', 'obrigado', 'obrigada', 'olá', 'ola', 'está', 'estou', 'não', 'nao', 'muito', 'também', 'tambem', 'porque', 'onde', 'como', 'posso', 'quero', 'pode',
+        'oi', 'tudo', 'bem', 'com', 'hoje', 'bom', 'boa', 'dia', 'noite', 'sim', 'agora', 'depois', 'então', 'entao', 'por', 'para', 'meu', 'minha', 'aqui', 'vocês', 'esta', 'isso', 'tá', 'né', 'ne'],
+  nl: ['het', 'een', 'van', 'ben', 'zijn', 'niet', 'wat', 'hoe', 'waarom', 'wanneer', 'alsjeblieft', 'dank', 'hallo', 'ik', 'jij', 'wij', 'met', 'voor', 'ook', 'zeer', 'kan', 'heeft', 'maar'],
+};
+
+function detecterLangue(texte) {
+  const t = String(texte || '').toLowerCase();
+  const mots = t.match(/[a-zà-ÿ’']+/g) || [];
+  if (mots.length < 2) return 'fr';
+  const score = {};
+  for (const langue of Object.keys(INDICES_LANGUES)) score[langue] = 0;
+  for (const [langue, liste] of Object.entries(INDICES_LANGUES)) {
+    const set = new Set(liste);
+    for (const mot of mots) if (set.has(mot)) score[langue]++;
+  }
+  if (/[àçœ]/.test(t)) score.fr += 2;      // ces accents sont typiquement français
+  if (/ß/.test(t) || /([aeiou])1/.test(t)) score.de += 2;  // ß et umlauts notés « a1 »
+  if (/ñ/.test(t)) score.es += 2;
+  let meilleure = 'fr';
+  let max = 0;
+  for (const [langue, n] of Object.entries(score)) { if (n > max) { meilleure = langue; max = n; } }
+  return max >= 2 ? meilleure : 'fr';       // courte ou ambigüe → français, la langue du serveur
+}
+
 // ─────────────────────────── mémoire par salon ───────────────────────────
 const memoires = new Map();            // `${guildId}:${channelId}` → messages
 const derniersAppels = new Map();      // userId → horodatage (anti-flood)
@@ -167,13 +206,28 @@ function memoire(guildId, channelId) {
   return memoires.get(cleMemoire(guildId, channelId)) || [];
 }
 
-function memoriser(guildId, channelId, role, contenu) {
+function memoriser(guildId, channelId, role, contenu, auteur = null) {
   const cle = cleMemoire(guildId, channelId);
   const liste = memoires.get(cle) || [];
-  liste.push({ role, contenu: String(contenu).slice(0, 2000) });
+  liste.push({
+    role,
+    contenu: String(contenu).slice(0, 2000),
+    ...(auteur ? { auteur: String(auteur).slice(0, 32) } : {}),
+  });
   while (liste.length > config.ia.memoire) liste.shift();
   memoires.set(cle, liste);
   return liste;
+}
+
+/**
+ * L'historique tel que le voient les modèles : les messages des membres sont
+ * précédés de leur pseudo, pour que l'IA sache QUI a dit QUOI dans un salon
+ * où plusieurs personnes parlent.
+ */
+function historiquePourPrompt(guildId, channelId) {
+  return memoire(guildId, channelId).map((m) => (
+    m.role === 'user' && m.auteur ? { ...m, contenu: `${m.auteur} : ${m.contenu}` } : m
+  ));
 }
 
 function oublier(guildId, channelId) {
@@ -222,13 +276,20 @@ function decouper(texte, limite = 1900) {
 function consigneSysteme(contexte = {}) {
   const serveur = contexte.serveur ? `Tu discutes sur le serveur Discord « ${contexte.serveur} ».` : '';
   const pseudo = contexte.pseudo ? `Ton interlocuteur s'appelle ${contexte.pseudo}.` : '';
+  const langue = LANGUES[contexte.langue] || LANGUES.fr;
+  const consigneLangue = contexte.langue && contexte.langue !== 'fr'
+    ? `On t'écrit en ${langue} : tu réponds dans la même langue, et tu suis la langue de chaque nouvelle question.`
+    : "Tu réponds en français (la langue de ce serveur), sauf si on t'écrit clairement dans une autre langue — alors réponds dans la sienne.";
   return [
-    "Tu es Otaku, un assistant Discord francophone, sympa et direct.",
-    "Tu réponds TOUJOURS en français, avec un ton chaleureux mais sans excès d'emojis (2 maximum).",
-    "Tes réponses sont courtes : 1 à 4 phrases, sauf si on te demande un texte long.",
+    "Tu es Otaku, un assistant Discord pro, sympa et direct.",
+    consigneLangue,
+    "Ton est chaleureux mais sobre : 2 emojis maximum par réponse.",
+    "Tes réponses sont courtes : 1 à 4 phrases, sauf si on te demande explicitement un texte long.",
+    "Tu n'inventes JAMAIS un lien, une règle du serveur, une personne ou une information : si tu ne sais pas, tu le dis en une phrase honnête et tu proposes la commande adaptée.",
+    "Mise en forme Discord : gras **...** et listes avec « • » seulement ; jamais de titres markdown (#), jamais de tableaux.",
     "Tu ne prétends jamais être un humain : si on te demande, tu dis que tu es le bot du serveur.",
-    "Tu n'inventes pas de commandes : les commandes du bot sont /ask, /aide, /config, /ban, /kick, /mute, /warn, /avertissements, /avertissement-retirer, /clear, /slowmode, /lock, /unlock, /role, /config (panneau complet), /guide (règles & support), /ia-reset, /donnees, /confidentialite.",
-    "Si une question sort de ton domaine ou demande une action de modération, tu invites poliment à utiliser la commande adaptée.",
+    "Les commandes qui existent vraiment : /ask (question à l'IA), /aide (liste d'aide et contact du staff), /config (réglages, pour le staff), /guide (repères du serveur), /avertissements (voir les siens), /avertissement-retirer (staff, en retirer un), /ia-reset (oublier la conversation), /donnees et /confidentialite (vie privée) ; côté staff : /warn, /mute, /kick, /ban, /clear, /slowmode, /lock, /unlock, /role, /automod et /logs (réglages rapides), /image-bienvenue (fond de la carte d'accueil). N'invente aucune autre commande.",
+    "Si on te demande une action de modération, tu ne la fais pas toi-même : tu invites à utiliser la commande staff adaptée.",
     serveur,
     pseudo,
     contexte.guide || '',
@@ -241,6 +302,9 @@ function consigneSysteme(contexte = {}) {
 
 module.exports = {
   ErreurIA,
+  detecterLangue,
+  historiquePourPrompt,
+  LANGUES,
   PHRASE_ECHEC,
   demander,
   decouper,

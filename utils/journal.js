@@ -12,7 +12,44 @@ const COULEUR = {
   warn: 0xfee75c,
   auto: 0xeb459e,
   ok: 0x3ba55d,
+  suppression: 0x9b59b6,
+  modification: 0x5865f2,
+  sortie: 0xe67e22,
 };
+
+// ─── silence ciblé : ce que le bot supprime lui-même est déjà raconté ───
+// mieux (avec sa propre richesse) ou sans intérêt ; on ne le redouble pas ici.
+const SILENCE = new Map();      // messageId → horodatage d'expiration
+const SALONS_TAIS = new Map();  // channelId → horodatage d'expiration (suppression groupée)
+
+function taireMessage(id, dureeMs = 15000) {
+  if (SILENCE.size > 500) { const t = Date.now(); for (const [k, e] of SILENCE) if (e < t) SILENCE.delete(k); }
+  SILENCE.set(id, Date.now() + dureeMs);
+}
+
+function taireSalon(channelId, dureeMs = 12000) {
+  SALONS_TAIS.set(channelId, Date.now() + dureeMs);
+}
+
+/** Le message est-il marqué silencieux ? La marque se consomme (un événement = une marque). */
+function estTaie(messageId, channelId) {
+  const m = SILENCE.get(messageId);
+  if (m !== undefined) {
+    SILENCE.delete(messageId);
+    if (m >= Date.now()) return true;
+  }
+  const s = SALONS_TAIS.get(channelId);
+  if (s !== undefined) {
+    if (s < Date.now()) { SALONS_TAIS.delete(channelId); return false; }
+    return true;
+  }
+  return false;
+}
+
+/** Neutralise les backticks d'un texte cité (sinon un message malin casse l'embed). */
+function chapper(texte) {
+  return String(texte ?? '').replace(/`/g, '\u02cb').replace(/@(everyone|here)/gi, '@\u200b$1');
+}
 
 /**
  * Envoie une ligne dans le salon de logs du serveur.
@@ -38,7 +75,7 @@ async function journaliser(guild, entree = {}) {
   if (entree.details) embed.setDescription(String(entree.details).slice(0, 1900));
 
   try {
-    await salon.send({ embeds: [embed] });
+    await salon.send({ embeds: [embed], allowedMentions: { parse: [] } });
     return true;
   } catch (erreur) {
     console.error('⚠️ Log non envoyé :', erreur.message);
@@ -46,4 +83,4 @@ async function journaliser(guild, entree = {}) {
   }
 }
 
-module.exports = { journaliser, COULEUR };
+module.exports = { journaliser, COULEUR, taireMessage, taireSalon, estTaie, chapper };

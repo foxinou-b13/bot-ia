@@ -65,6 +65,7 @@ const REGLAGES_DEFAUT = {
     raid: true,
     salonExempt: null,
   },
+  journal: { suppressions: true, modifications: true, sorties: true },
   muteRole: null,
   ia: { active: true, salonBloques: [], consigne: '' },
 };
@@ -83,6 +84,7 @@ function reglages(guildId) {
     guide: { ...REGLAGES_DEFAUT.guide, ...(siens.guide || {}) },
     automod: { ...REGLAGES_DEFAUT.automod, ...(siens.automod || {}) },
     ia: { ...REGLAGES_DEFAUT.ia, ...(siens.ia || {}), salonBloques: [...((siens.ia || {}).salonBloques || [])] },
+    journal: { ...REGLAGES_DEFAUT.journal, ...(siens.journal || {}) },
   };
 }
 
@@ -96,6 +98,7 @@ function majReglages(guildId, morceau) {
     guide: { ...(avant.guide || {}), ...(morceau.guide || {}) },
     automod: { ...(avant.automod || {}), ...(morceau.automod || {}) },
     ia: { ...(avant.ia || {}), ...(morceau.ia || {}) },
+    journal: { ...(avant.journal || {}), ...(morceau.journal || {}) },
   };
   if (morceau.bienvenue === undefined) tous[guildId].bienvenue = avant.bienvenue || REGLAGES_DEFAUT.bienvenue;
   if (morceau.automod === undefined) tous[guildId].automod = avant.automod || REGLAGES_DEFAUT.automod;

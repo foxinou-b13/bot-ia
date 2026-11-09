@@ -48,7 +48,7 @@ const RUBRIQUES = {
   accueil: {
     label: '👋 Accueil des nouveaux',
     aide: 'Carte de bienvenue, message, rôle automatique',
-    intro: 'Quand un membre arrive, Otaku envoie la **carte-image de bienvenue** (sa photo + BIENVENUE) et le mentionne. Choisis un réglage ci-dessous — chacun a sa carte.',
+    intro: 'Quand un membre arrive, Otaku envoie la **carte-image de bienvenue** (sa photo + BIENVENUE) et le mentionne.',
     items: {
       salon: {
         label: '📋 Salon de bienvenue',
@@ -64,7 +64,11 @@ const RUBRIQUES = {
       },
       fond: {
         label: '🖼️ Image de fond de la carte',
-        desc: 'Le décor derrière la photo du nouveau.\n• **Rien à faire par défaut** : le bot utilise l\'image prévue pour ton serveur (prairie de cosmos).\n• **Envie d\'une autre image ?** Touche « 📱 Choisir une image » : **une fenêtre s\'ouvre automatiquement** — « Ajouter des fichiers » ouvre direct ta galerie (téléphone) ou tes dossiers (PC). L\'image va DIRECTEMENT au bot : rien n\'est posté dans le salon, rien en MP. Elle est rangée dans mon petit salon privé « otaku-fonds-de-carte » (invisible pour les membres) pour ne jamais mourir, et tu reçois l\'aperçu réel de la carte en privé.\n• Si la fenêtre refuse de s\'ouvrir (appli très ancienne) : le bot poste une invitation dans le salon — tu y réponds avec 📎, il range et efface tout.\n• « 🔗 Adresse d\'image » : coller un lien. « 🌸 Fond par défaut » : y revenir à tout moment.',
+        desc: 'Le décor derrière la photo du nouveau.\n'
+        + '• **Par défaut** : le fond préparé pour ton serveur (prairie de cosmos) — rien à faire.\n'
+        + '• **📱 Choisir une image** : une fenêtre s\u2019ouvre, ton image part directement au bot — rien n\u2019est posté dans le salon — et tu reçois l\u2019aperçu réel de la carte en privé.\n'
+        + '• **🔗 Adresse d\u2019image** : coller un lien http(s).\n'
+        + '• **🌸 Fond par défaut** : pour y revenir à tout moment.',
       },
       message: {
         label: '✏️ Message d\'accroche',
@@ -83,7 +87,7 @@ const RUBRIQUES = {
     items: {
       logs: {
         label: '🗂️ Journal du staff',
-        desc: 'Salon PRIVÉ où Otaku note tout ce qui compte : sanctions, alertes auto-mod, suppressions de messages. Choisis un salon que seuls tes modérateurs voient.',
+        desc: 'Salon PRIVÉ où Otaku note tout ce qui compte : sanctions, alertes d\'auto-modération, messages supprimés ou modifiés, départs de membres. Choisis un salon que seuls tes modérateurs voient.',
       },
       regles: {
         label: '📜 Salon des règles',
@@ -92,6 +96,10 @@ const RUBRIQUES = {
       support: {
         label: '🛟 Contacter le staff',
         desc: 'Quand un membre demande de l\'aide (commande /aide), Otaku l\'oriente vers ce salon où le staff le verra.',
+      },
+      journal: {
+        label: '📓 Contenu du journal',
+        desc: 'En plus des sanctions et des alertes d\'auto-modération (toujours notées), Otaku peut garder une trace des messages supprimés, des modifications et des départs. Coche ce qui t\'intéresse.',
       },
     },
   },
@@ -150,6 +158,16 @@ const bouton = (id, libelle, emoji, style = ButtonStyle.Secondary) =>
 
 const boutonRetour = () => rang(bouton('cfg:retour', '← Retour à la rubrique', '↩️'));
 
+// ─── propreté commune : un seul style pour toutes les cartes ───
+const VIDE = '— non défini —';
+/** Titre propre : on retire l'emoji du libellé (le titre garde ⚙️ tout seul). */
+function titreNet(libelle) { return String(libelle).replace(/^[^\p{L}\p{N}]+/u, '').trim(); }
+/** Le champ d'état unique de toutes les cartes de réglage. */
+function valeurActuelle(embed, valeur) {
+  embed.addFields({ name: '📌 Valeur actuelle', value: String(valeur || VIDE) });
+  return embed;
+}
+
 // ─── carte 1 : les rubriques, rien d'autre ───
 function ecranRacine(note = null) {
   const embed = new EmbedBuilder()
@@ -160,7 +178,8 @@ function ecranRacine(note = null) {
       note ? '' : null,
       'Choisis une **rubrique** dans le menu : tu verras ensuite ses réglages, **un par un, chacun sur sa carte** avec son explication.',
       'Tout se fait par menus — rien à taper dans le chat. Chaque changement est enregistré tout de suite.',
-    ].filter((l) => l !== null && l !== undefined && l !== '').join('\n'));
+    ].filter((l) => l !== null && l !== undefined && l !== '').join('\n'))
+    .setFooter({ text: 'Otaku · configuration du serveur' });
   const select = rang(new StringSelectMenuBuilder()
     .setCustomId('cfg:section')
     .setPlaceholder('⚙️ Que veux-tu configurer ?')
@@ -172,12 +191,27 @@ function ecranRacine(note = null) {
 function etatAccueil(G) {
   const b = stockage.reglages(G).bienvenue || {};
   return {
-    salon: b.salon ? `<#${b.salon}>` : '_non défini — accueil coupé_',
-    role: b.role ? `<@&${b.role}>` : '_aucun_',
+    salon: b.salon ? `<#${b.salon}>` : VIDE,
+    role: b.role ? `<@&${b.role}>` : VIDE,
     langue: b.langue === 'en' ? 'WELCOME (anglais)' : 'BIENVENUE (français)',
-    fond: b.fond ? `🖼️ image perso : <${b.fond}>` : '🌸 fond par défaut du serveur (cosmos)',
-    message: b.message ? `\`${String(b.message).slice(0, 90)}\`` : '_le message standard du bot_',
+    fond: b.fond ? `🖼️ image perso : <${b.fond}>` : '🌸 fond par défaut (cosmos)',
+    message: b.message ? `\`${String(b.message).slice(0, 90)}\`` : VIDE,
   };
+}
+
+const NOMS_JOURNAL = { suppressions: 'messages supprimés', modifications: 'messages modifiés', sorties: 'départs de membres' };
+
+const DESCRIPTIONS_JOURNAL = {
+  suppressions: 'auteur, salon et extrait du message effacé',
+  modifications: 'avant / après de chaque modification',
+  sorties: 'qui part, depuis quand, compte jeune signalé',
+};
+
+function journalActif(r) {
+  const j = r.journal || {};
+  const actifs = Object.keys(NOMS_JOURNAL).filter((cle) => j[cle] !== false);
+  return actifs.length === 3 ? '✅ tout (suppressions · modifications · départs)'
+    : (actifs.length ? `📝 ${actifs.map((c) => NOMS_JOURNAL[c]).join(' · ')}` : '🔇 rien de plus que les sanctions');
 }
 
 function carteRubrique(G, sec, channelId, note) {
@@ -186,7 +220,7 @@ function carteRubrique(G, sec, channelId, note) {
   const embed = new EmbedBuilder().setColor(COULEUR).setTitle(rub.label).setDescription(
     [note ? `**${note}**\n` : null, rub.intro, '\n👇 Choisis le réglage que tu veux changer — il aura sa propre carte.']
       .filter(Boolean).join('\n'),
-  );
+  ).setFooter({ text: 'Otaku · configuration du serveur' });
   const a = r.automod || {};
   if (sec === 'accueil') {
     const e = etatAccueil(G);
@@ -199,15 +233,16 @@ function carteRubrique(G, sec, channelId, note) {
     );
   } else if (sec === 'salons') {
     embed.addFields(
-      { name: '🗂️ Journal du staff', value: r.logs ? `<#${r.logs}>` : '_non défini_', inline: true },
-      { name: '📜 Salon des règles', value: r.guide.regles ? `<#${r.guide.regles}>` : '_non défini_', inline: true },
-      { name: '🛟 Contacter le staff', value: r.guide.support ? `<#${r.guide.support}>` : '_non défini_', inline: true },
+      { name: '🗂️ Journal du staff', value: r.logs ? `<#${r.logs}>` : VIDE, inline: true },
+      { name: '📜 Salon des règles', value: r.guide.regles ? `<#${r.guide.regles}>` : VIDE, inline: true },
+      { name: '🛟 Contacter le staff', value: r.guide.support ? `<#${r.guide.support}>` : VIDE, inline: true },
+      { name: '📓 Traces notées', value: journalActif(r) },
     );
   } else if (sec === 'automod') {
     const actifs = Object.entries(MODULES).filter(([cle]) => a[cle]).map(([, m]) => m.nom);
     embed.addFields(
-      { name: '🧰 Modules actifs', value: actifs.length ? actifs.join(' · ') : '_aucun — tout est coupé_' },
-      { name: '🤫 Salon exempté', value: a.salonExempt ? `<#${a.salonExempt}>` : '_aucun_', inline: true },
+      { name: '🧰 Modules actifs', value: actifs.length ? `✅ ${actifs.join(' · ')}` : '🔇 tous coupés' },
+      { name: '🤫 Salon exempté', value: a.salonExempt ? `<#${a.salonExempt}>` : '🔓 aucun salon exempté', inline: true },
     );
   } else if (sec === 'sanctions') {
     embed.addFields({
@@ -218,8 +253,8 @@ function carteRubrique(G, sec, channelId, note) {
     const iaR = r.ia || {};
     const coupeeIci = Boolean(channelId && (iaR.salonBloques || []).includes(channelId));
     embed.addFields(
-      { name: '🤖 État pour ce salon', value: iaR.active === false ? '_coupée partout_' : (coupeeIci ? '🔇 coupée ici' : '🟢 active ici'), inline: true },
-      { name: '🎭 Personnalité', value: iaR.consigne ? `> ${String(iaR.consigne).slice(0, 90)}` : '_standard_', inline: true },
+      { name: '🤖 État pour ce salon', value: iaR.active === false ? '🔇 coupée partout' : (coupeeIci ? '🔇 coupée ici' : '🟢 active ici'), inline: true },
+      { name: '🎭 Personnalité', value: iaR.consigne ? `> ${String(iaR.consigne).slice(0, 90)}` : 'standard', inline: true },
     );
   }
   const menu = rang(new StringSelectMenuBuilder()
@@ -249,47 +284,61 @@ function carteReglage(G, sec, cle, channelId, note = null, opts = {}) {
   const iaR = r.ia || {};
   const embed = new EmbedBuilder()
     .setColor(COULEUR)
-    .setTitle(`${it.label}  —  ${RUBRIQUES[sec].label}`)
-    .setDescription([note ? `**${note}**\n` : null, it.desc].filter(Boolean).join('\n'));
+    .setTitle(`⚙️ ${titreNet(it.label)}`)
+    .setDescription([note ? `**${note}**\n` : null, it.desc].filter(Boolean).join('\n'))
+    .setFooter({ text: `Otaku · ${RUBRIQUES[sec].label}` });
 
   const rows = [];
   const selectCanal = (id, place) => rang(new ChannelSelectMenuBuilder().setCustomId(id).setPlaceholder(place)
     .addChannelTypes(ChannelType.GuildText, ChannelType.GuildAnnouncement));
 
   if (sec === 'accueil' && cle === 'salon') {
-    embed.addFields({ name: 'Actuellement', value: b.salon ? `<#${b.salon}>` : '_aucun salon — accueil coupé_' });
+    valeurActuelle(embed, b.salon ? `<#${b.salon}>` : '🔕 aucun — accueil coupé');
     rows.push(selectCanal('cfg:accueil:salon', '📋 Dans quel salon souhaiter la bienvenue ?'));
   } else if (sec === 'accueil' && cle === 'role') {
-    embed.addFields({ name: 'Actuellement', value: b.role ? `<@&${b.role}>` : '_aucun rôle automatique_' });
+    valeurActuelle(embed, b.role ? `<@&${b.role}>` : '🧹 aucun rôle automatique');
     rows.push(
       rang(new RoleSelectMenuBuilder().setCustomId('cfg:accueil:role')
         .setPlaceholder('🎭 Choisis le rôle à donner automatiquement aux nouveaux')),
       rang(bouton('cfg:accueil:role-off', 'Retirer le rôle', '🧹')),
     );
   } else if (sec === 'accueil' && cle === 'langue') {
-    embed.addFields({ name: 'Actuellement', value: b.langue === 'en' ? 'WELCOME (anglais)' : 'BIENVENUE (français)' });
+    valeurActuelle(embed, b.langue === 'en' ? 'WELCOME (anglais)' : 'BIENVENUE (français)');
     rows.push(rang(new StringSelectMenuBuilder().setCustomId('cfg:accueil:langue').setPlaceholder('🌍 Choisis la langue de la carte')
       .addOptions(
         { label: 'BIENVENUE (français)', value: 'fr', default: b.langue !== 'en' },
         { label: 'WELCOME (anglais)', value: 'en', default: b.langue === 'en' },
       )));
   } else if (sec === 'accueil' && cle === 'fond') {
-    embed.addFields({ name: 'Actuellement', value: b.fond ? `🖼️ image perso : <${b.fond}>` : '🌸 fond par défaut du serveur (cosmos)' });
+    valeurActuelle(embed, b.fond ? `🖼️ image perso : <${b.fond}>` : '🌸 fond par défaut (prairie de cosmos)');
     rows.push(rang(...boutonFondPersonnalisee()));
   } else if (sec === 'accueil' && cle === 'message') {
-    embed.addFields({ name: 'Actuellement', value: b.message ? `\`${String(b.message).slice(0, 90)}\`` : '_le message standard_\n> ' + MESSAGE_DEFAUT.slice(0, 90) });
+    valeurActuelle(embed, b.message ? `\`${String(b.message).slice(0, 90)}\`` : '*Standard :*\n> `' + MESSAGE_DEFAUT + '`');
     rows.push(rang(bouton('cfg:accueil:msg', 'Écrire le message', '✏️', ButtonStyle.Primary),
       bouton('cfg:accueil:msg-off', 'Revenir au standard', '🧹')));
   } else if (sec === 'accueil' && cle === 'couper') {
-    embed.addFields({ name: 'Actuellement', value: b.salon ? `✅ accueil actif → <#${b.salon}>` : '🔕 accueil déjà coupé' });
+    valeurActuelle(embed, b.salon ? `✅ accueil actif — la carte part dans <#${b.salon}>` : '🔕 accueil coupé');
     rows.push(rang(bouton('cfg:accueil:off', b.salon ? 'Couper l\'accueil maintenant' : 'L\'accueil est déjà coupé', '🔕', b.salon ? ButtonStyle.Danger : ButtonStyle.Secondary)));
+  } else if (sec === 'salons' && cle === 'journal') {
+    const jj = r.journal || {};
+    valeurActuelle(embed, journalActif(r));
+    rows.push(rang(new StringSelectMenuBuilder()
+      .setCustomId('cfg:journal')
+      .setPlaceholder('📓 Que doit noter le journal ? (les sanctions restent toujours notées)')
+      .setMinValues(0)
+      .setMaxValues(3)
+      .addOptions(Object.entries(NOMS_JOURNAL).map(([cleJ, nom]) => ({
+        label: nom, value: cleJ, description: DESCRIPTIONS_JOURNAL[cleJ], default: jj[cleJ] !== false,
+      })))));
   } else if (sec === 'salons') {
     const actuel = cle === 'logs' ? r.logs : (r.guide || {})[cle];
-    embed.addFields({ name: 'Actuellement', value: actuel ? `<#${actuel}>` : '_non défini_' });
+    valeurActuelle(embed, actuel);
     const libelles = { logs: '🗂️ Salon des journaux du staff', regles: '📜 Salon des règles', support: '🛟 Salon pour contacter le staff' };
     rows.push(selectCanal(`cfg:salons:${cle}`, libelles[cle]));
     rows.push(rang(bouton(`cfg:salons:${cle}-off`, 'Retirer ce salon', '🧹')));
   } else if (sec === 'automod' && cle === 'modules') {
+    const actifsM = Object.entries(MODULES).filter(([cleM]) => a[cleM]).map(([, m]) => m.nom);
+    valeurActuelle(embed, actifsM.length ? `✅ ${actifsM.join(' · ')}` : '🔇 aucun module actif');
     rows.push(rang(new StringSelectMenuBuilder()
       .setCustomId('cfg:modules')
       .setPlaceholder('🧰 Coche ce qui doit rester ACTIF (décoche = coupé)')
@@ -299,14 +348,11 @@ function carteReglage(G, sec, cle, channelId, note = null, opts = {}) {
         label: m.nom, value: cle2, description: m.aide.slice(0, 95), default: Boolean(a[cle2]),
       })))));
   } else if (sec === 'automod' && cle === 'exempt') {
-    embed.addFields({ name: 'Actuellement', value: a.salonExempt ? `<#${a.salonExempt}>` : '_aucun salon exempté_' });
+    valeurActuelle(embed, a.salonExempt ? `<#${a.salonExempt}>` : '🔓 aucun — tous les salons sont filtrés');
     rows.push(selectCanal('cfg:exempt', '🤫 Un salon où l\'auto-mod ne filtre jamais ?'));
     rows.push(rang(bouton('cfg:exempt-off', 'Retirer l\'exemption', '🧹')));
   } else if (sec === 'sanctions' && cle === 'formule') {
-    embed.addFields({
-      name: 'Actuellement',
-      value: a.sanctionAuto ? `**${a.seuilAvert || 3}** avertissement(s) → sourdine **${a.dureeSanction || 60} min**` : '_désactivée_',
-    });
+    valeurActuelle(embed, a.sanctionAuto ? `**${a.seuilAvert || 3}** avertissements → sourdine **${a.dureeSanction || 60} min**` : '⚪ désactivée');
     rows.push(rang(new StringSelectMenuBuilder()
       .setCustomId('cfg:sanction')
       .setPlaceholder('⚖️ Choisis une formule')
@@ -319,10 +365,10 @@ function carteReglage(G, sec, cle, channelId, note = null, opts = {}) {
       )));
   } else if (sec === 'ia' && cle === 'ici') {
     const coupee = Boolean(channelId && (iaR.salonBloques || []).includes(channelId));
-    embed.addFields({ name: 'Dans ce salon', value: iaR.active === false ? '_IA coupée partout (valeur par défaut)_' : (coupee ? '🔇 coupée' : '🟢 active') });
+    valeurActuelle(embed, iaR.active === false ? '🔇 coupée partout' : (coupee ? '🔇 coupée dans ce salon' : '🟢 active dans ce salon'));
     rows.push(rang(bouton('cfg:ia-ici', coupee ? 'Réactiver l\'IA ici' : 'Couper l\'IA ici', coupee ? '🟢' : '🔇', coupee ? ButtonStyle.Success : ButtonStyle.Danger)));
   } else if (sec === 'ia' && cle === 'personnalite') {
-    embed.addFields({ name: 'Actuellement', value: iaR.consigne ? `> ${String(iaR.consigne).slice(0, 120)}` : '_standard_' });
+    valeurActuelle(embed, iaR.consigne ? `> ${String(iaR.consigne).slice(0, 120)}` : 'Personnalité standard (polie et concise)');
     rows.push(rang(bouton('cfg:perso', 'Écrire la personnalité', '🎭', ButtonStyle.Primary)));
   } else if (sec === 'ia' && cle === 'memo') {
     rows.push(rang(bouton('cfg:memo', 'Oublier la conversation de CE salon', '🧠', ButtonStyle.Danger)));
@@ -566,6 +612,16 @@ module.exports = {
         ? `✅ Actifs : ${choisis.map((c) => MODULES[c]?.nom).filter(Boolean).join(', ')}.`
         : '⚪ Tous les modules sont désactivés.');
     }
+    if (id === 'cfg:journal' && interaction.isStringSelectMenu()) {
+      const v = interaction.values;
+      return maj({ journal: {
+        suppressions: v.includes('suppressions'),
+        modifications: v.includes('modifications'),
+        sorties: v.includes('sorties'),
+      } }, v.length
+        ? `📓 Journal : ${v.map((c) => NOMS_JOURNAL[c]).filter(Boolean).join(', ')} — enregistré.`
+        : '📓 Journal : seules les sanctions et l\'auto-mod seront notés.');
+    }
     if (id === 'cfg:exempt' && interaction.isChannelSelectMenu()) {
       const salon = interaction.channels.first();
       return maj({ automod: { salonExempt: salon ? salon.id : null } },
@@ -622,6 +678,8 @@ module.exports = {
   MODULES,
   SECTIONS,
   RUBRIQUES,
+  VIDE,
+  titreNet,
   panneauPrincipal,
   ecranCourant,
   carteRubrique,

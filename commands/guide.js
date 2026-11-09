@@ -19,7 +19,7 @@ module.exports = {
     const champs = [];
     if (r.guide.regles) champs.push({ name: '📜 Les règles', value: `À lire ici : <#${r.guide.regles}>` });
     if (r.guide.support) champs.push({ name: '🛟 Contacter le staff', value: `Pour une demande au staff : <#${r.guide.support}>` });
-    if (r.bienvenue.salon) champs.push({ name: '👋 Se présenter', value: `C'est dans <#${r.bienvenue.salon}> que ça se passe !` });
+    if (r.bienvenue.salon) champs.push({ name: '👋 Salon d\u2019accueil', value: `Les nouveaux y sont accueillis — présente-toi à ton arrivée dans <#${r.bienvenue.salon}> !` });
 
     if (!champs.length) {
       return panneaux.repondre(

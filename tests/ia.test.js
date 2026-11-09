@@ -154,6 +154,67 @@ test('anti-flood : deux questions d\'affilée sont bloquées', () => {
   assert.strictEqual(troisieme.bloque, false);
 });
 
+test('détection de langue : 7 langues, français par défaut', () => {
+  const ia = require('../utils/ia');
+  const cas2 = [
+    ['salut comment ça vas moi c est paul', 'fr'],
+    ['hello how are you today my friend', 'en'],
+    ['wie geht es dir heute mein freund', 'de'],
+    ['hola como estas amigo mio', 'es'],
+    ['ciao come stai oggi', 'it'],
+    ['oi tudo bem com voce hoje', 'pt'],
+    ['hallo hoe gaat het met je vandaag', 'nl'],
+    ['ok', 'fr'],
+    ['?', 'fr'],
+  ];
+  for (const [texte, attendu] of cas2) {
+    assert.strictEqual(ia.detecterLangue(texte), attendu, `« ${texte} » → ${ia.detecterLangue(texte)}, attendu ${attendu}`);
+  }
+});
+
+test('la consigne système suit LA LANGUE de la question (plus de français forcé)', () => {
+  const ia = require('../utils/ia');
+  const fr = ia.consigneSysteme({ langue: 'fr' });
+  assert.ok(fr.includes('français'), 'le français reste la langue du serveur');
+  assert.ok(!/TOUJOURS en français/.test(fr), 'plus d’obligation aveugle de français');
+  const en = ia.consigneSysteme({ langue: 'en' });
+  assert.ok(en.includes('anglais'), 'l’anglais doit être explicitement demandé');
+});
+
+test('la consigne interdit les inventions et impose le style Discord léger', () => {
+  const ia = require('../utils/ia');
+  const consigne = ia.consigneSysteme({});
+  assert.ok(/n'inventes JAMAIS/.test(consigne), 'anti-hallucination manquant');
+  assert.ok(/ne sais pas/.test(consigne), 'doit pouvoir dire « je ne sais pas »');
+  assert.ok(/jamais de titres markdown/.test(consigne), 'style Discord imposé');
+  assert.ok(/commandes qui existent vraiment/.test(consigne), 'liste exacte des commandes');
+});
+
+test("la mémoire retient QUI a parlé ; le prompt restitue les signatures", () => {
+  const ia = require('../utils/ia');
+  const G = 'G-LANGUE-TEST';
+  ia.oublier(G, 'C1');
+  ia.memoriser(G, 'C1', 'user', 'bonjour ça va', 'Alice');
+  ia.memoriser(G, 'C1', 'assistant', 'oui et toi ?');
+  ia.memoriser(G, 'C1', 'user', 'nickel', 'Bob');
+  const hist = ia.historiquePourPrompt(G, 'C1');
+  assert.strictEqual(hist.length, 3);
+  assert.ok(hist[0].contenu.startsWith('Alice : '), 'signatures absentes : ' + hist[0].contenu);
+  assert.strictEqual(hist[1].contenu, 'oui et toi ?', 'la réponse du bot ne se signe pas');
+  assert.ok(hist[2].contenu.startsWith('Bob : '), 'deuxième membre non signé');
+  ia.oublier(G, 'C1');
+});
+
+test('les DEUX chemins IA (/ask et mention) appliquent langue + auteurs', () => {
+  const fs = require('fs');
+  const ask = fs.readFileSync(require('path').join(__dirname, '..', 'commands', 'ask.js'), 'utf8');
+  assert.ok(ask.includes('detecterLangue(question)'), '/ask doit détecter la langue');
+  assert.ok(ask.includes('historiquePourPrompt'), '/ask doit utiliser l’historique signé');
+  assert.ok(/memoriser\([^)]*displayName/.test(ask), '/ask doit mémoriser l’auteur');
+  const mention = fs.readFileSync(require('path').join(__dirname, '..', 'events', 'messageCreate.js'), 'utf8');
+  assert.ok(mention.includes('detecterLangue(question)') && mention.includes('historiquePourPrompt'), 'la mention doit faire pareil');
+});
+
 module.exports = { nom: 'ia', cas };
 
 if (require.main === module) require('./executeur')(module.exports);

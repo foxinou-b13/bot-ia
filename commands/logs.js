@@ -8,7 +8,7 @@ module.exports = {
   categorie: 'configuration',
   data: new SlashCommandBuilder()
     .setName('logs')
-    .setDescription('Choisit le salon où le bot note les sanctions et actions')
+    .setDescription('Le salon où le bot note sanctions, auto-mod, suppressions, modifications et départs')
     .setDefaultMemberPermissions(PermissionsBitField.Flags.ManageGuild)
     .addChannelOption((o) => o
       .setName('salon')
@@ -23,8 +23,8 @@ module.exports = {
 
     if (!salon) {
       stockage.majReglages(interaction.guildId, { logs: null });
-      return panneaux.ok(interaction, '🔕 Logs désactivés',
-        'Le bot ne notera plus les sanctions.');
+      return panneaux.ok(interaction, '🔕 Journal désactivé',
+        'Le bot ne notera plus rien (ni sanctions, ni suppressions, ni départs).');
     }
 
     stockage.majReglages(interaction.guildId, { logs: salon.id });
@@ -34,7 +34,7 @@ module.exports = {
       details: 'Les prochaines actions de modération apparaîtront ici.',
     });
 
-    return panneaux.ok(interaction, '📋 Salon des logs enregistré',
-      `Toutes les sanctions seront notées dans <#${salon.id}>.`);
+    return panneaux.ok(interaction, '📋 Journal du staff enregistré',
+      `Sanctions, alertes d\u2019auto-modération et traces (suppressions, modifications, départs) seront notées dans <#${salon.id}>.`);
   },
 };
