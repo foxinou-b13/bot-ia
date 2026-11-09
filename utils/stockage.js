@@ -67,7 +67,7 @@ const REGLAGES_DEFAUT = {
   },
   journal: { suppressions: true, modifications: true, sorties: true },
   assistant: { actif: false, categorie: null, panneau: null, alerte: null, staffRole: null, questions: [] },
-  tickets: { actif: false, categorie: null, panneau: null, logs: null, staffRole: null, titre: null, texte: null, mode: 'bouton', types: [] },
+  tickets: { actif: false, categorie: null, panneau: null, logs: null, staffRole: null, titre: null, texte: null, mode: 'bouton', types: [], vue: 'style' },
   muteRole: null,
   ia: { active: true, salonBloques: [], consigne: '' },
 };

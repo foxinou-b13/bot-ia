@@ -414,15 +414,34 @@ test('étape 1 : la rubrique ouvre sur le choix Ticket Bouton / Ticket Menu, rie
   assert.deepStrictEqual(carte.components[0].toJSON().components[0].options.map((o) => o.value), ['bouton', 'menu']);
 });
 
-test('étape 2 : le style choisi fait apparaître le menu des actions', async () => {
+test('étape 2 : le choix fait passer sur SA carte à lui — un seul menu, celui des actions', async () => {
   const configCmd = require('../commands/config');
-  stockage.majReglages(G, { tickets: { mode: null } });
-  const i = await tikCfg({ customId: 'cfg:tikw:mode', values: ['menu'], update: async () => {} });
+  stockage.majReglages(G, { tickets: { mode: null, vue: 'style' } });
+  await tikCfg({ customId: 'cfg:tikw:mode', values: ['menu'] });
   assert.strictEqual(stockage.reglages(G).tickets.mode, 'menu', 'le choix du style est enregistré');
+  assert.strictEqual(stockage.reglages(G).tickets.vue, 'actions', 'on est passé à l’étape suivante');
   const carte = configCmd.carteRubrique(G, 'tickets', 'C1', null);
-  assert.deepStrictEqual(carte.components.map((r) => r.toJSON().components[0].custom_id), ['cfg:tikw:mode', 'cfg:tikw:action', 'cfg:racine'], 'le menu des actions est apparu sous le choix');
-  assert.deepStrictEqual(carte.components[1].toJSON().components[0].options.map((o) => o.value),
+  const ids = carte.components.map((r) => r.toJSON().components[0].custom_id);
+  assert.deepStrictEqual(ids, ['cfg:tikw:action', 'cfg:tikw:style'], 'la carte 2 porte le menu des actions SEUL, plus le menu de style');
+  assert.strictEqual(carte.components[1].toJSON().components[1].custom_id, 'cfg:racine');
+  assert.deepStrictEqual(carte.components[0].toJSON().components[0].options.map((o) => o.value),
     ['nouveau', 'supprimer', 'textes', 'reset', 'finir']);
+  assert.match(carte.embeds[0].toJSON().title, /étape 2/, 'le titre dit où on est');
+  // le bouton « Changer de style » ramène bien à la carte 1, menu de style seul
+  await tikCfg({ customId: 'cfg:tikw:style' });
+  assert.strictEqual(stockage.reglages(G).tickets.vue, 'style');
+  const c1 = configCmd.carteRubrique(G, 'tickets', 'C1', null);
+  assert.deepStrictEqual(c1.components.map((r) => r.toJSON().components[0].custom_id), ['cfg:tikw:mode', 'cfg:racine']);
+  assert.match(c1.embeds[0].toJSON().title, /étape 1/);
+});
+
+test('entrer dans la rubrique repart de l’étape 1 (jamais deux menus collés)', async () => {
+  const configCmd = require('../commands/config');
+  stockage.majReglages(G, { tickets: { mode: 'bouton', vue: 'actions' } });
+  await configCmd.composant({ customId: 'cfg:section', guildId: G, inGuild: () => true,
+    isStringSelectMenu: () => true, values: ['tickets'], member: { permissions: { has: () => true } },
+    update: async () => {}, reply: async () => {} });
+  assert.strictEqual(stockage.reglages(G).tickets.vue, 'style', 'la rubrique s’ouvre sur l’étape 1');
 });
 
 test('➕ Créer un nouveau bouton : la fenêtre s\u2019ouvre, le bouton est créé, on revient au menu', async () => {

@@ -178,14 +178,15 @@ Tape `/config` : un menu « Que veux-tu configurer ? » avec 7 sections ; chaque
 - **🤝 Assistant dans les tickets** : activer/couper, catégorie des tickets, panneau d'origine, rôle staff, salon d'alerte, questions fixes (une par ligne, 6 max).
 - **🎫 Tickets (système maison)** : interrupteur, **format du panneau (boutons ou menu déroulant)**, catégorie, salon du panneau, transcriptions, rôle staff, types de tickets (emoji + nom, 6 max), textes du panneau.
 
-## L'assistant tickets dans /config (v1.6.0)
-`/config` → **🎫 Système de tickets** : plus rien à remplir à la main, des menus qui s'enchaînent comme chez les grands bots :
-1. **Étape 1** — choisis **🎛️ Ticket Bouton** (un bouton par type sous la carte) ou **📋 Ticket Menu** (un menu déroulant de types).
-2. **Étape 2** — un menu d'actions apparaît : **➕ Créer un nouveau bouton** (fenêtre : nom, emoji, description), **🗑️ Supprimer un
-   bouton** (on le choisit dans la liste), **✏️ Modifier le panneau** (fenêtre : titre + texte → « Envoyer » publie la carte
-   direct dans le salon du panneau), **🧹 Réinitialiser les textes**, et **✅ Terminer — publier le panneau** (active les tickets).
-Chaque action revient au menu avec un ✓ et la suite à faire. 6 boutons maximum, comme les grands. Les salons (catégorie,
-panneau, logs, rôle staff) se posent en une fois avec `/tickets setup`. **Jamais d'image générée sous le panneau.**
+## L'assistant tickets dans /config (v1.6.0 → 1.6.1)
+`/config` → **🎫 Système de tickets** : un assistant, **une carte par menu** — jamais deux menus collés, jamais un pavé de texte.
+1. **Carte « étape 1 »** : le menu des styles seul — **🎛️ Ticket Bouton** ou **📋 Ticket Menu**. Un clic = enregistré, on passe à la suite.
+2. **Carte « étape 2 »** : le menu des actions seul — **➕ Créer un nouveau bouton** (fenêtre : nom, emoji, description), **🗑️ Supprimer
+   un bouton** (sa propre carte avec la liste), **✏️ Modifier le panneau** (fenêtre titre + texte → « Envoyer » publie direct),
+   **🧹 Réinitialiser les textes**, **✅ Terminer — publier le panneau** (active les tickets). Bouton « 🕹️ Changer de style » pour
+   revenir à l'étape 1. Entrer dans la rubrique repart toujours de l'étape 1.
+6 boutons maximum. Les salons (catégorie, panneau, logs, rôle staff) se posent en une fois avec `/tickets setup`.
+**Jamais d'image générée sous le panneau.**
 
 ## Système de tickets maison (v1.4.0)
 Otaku gère ses propres tickets, sans dépendre d'un autre bot — `/tickets` :

@@ -264,47 +264,54 @@ function listeTypes(t) {
  * (créer un bouton, en supprimer, textes du panneau, publier) — chaque action
  * revient ici, avec un ✓ et ce qui reste à faire.
  */
+/**
+ * La rubrique 🎫 est un assistant : chaque menu a SA carte, une étape à la fois.
+ * Étape 1 (style) → clic → Étape 2 (actions) → chaque action revient à l'étape 2.
+ * L'étape affichée est mémorisée par serveur (tickets.vue), comme le reste de /config.
+ */
 function carteTicketWizard(G, note = null) {
   const t = stockage.reglages(G).tickets || {};
   const types = listeTypes(t);
-  const modeSelon = t.mode === 'menu' ? '📋 Ticket Menu — un menu déroulant sous la carte'
-    : (t.mode === 'bouton' ? '🎛️ Ticket Bouton — un bouton par type' : VIDE);
-  const embed = new EmbedBuilder().setColor(COULEUR)
-    .setTitle('🎫 Système de tickets')
-    .setDescription([
-      note ? `**${note}**\n` : null,
-      t.actif ? '✅ Tickets actifs — le panneau fait son travail.'
-        : '⬜ Tickets coupés — « ✅ Terminer — publier le panneau » les activera.',
-      '',
-      '**Étape 1** — choisis le style du panneau. **Étape 2** — choisis une action dans le menu qui apparaît.',
-      'Jamais d\u2019image sous le panneau : c\u2019est le contrat.',
-    ].filter(Boolean).join('\n'))
-    .addFields(
-      { name: '🕹️ Style choisi', value: modeSelon, inline: true },
-      { name: '🏷️ Boutons', value: `${types.length} sur 6`, inline: true },
-      { name: '🧾 Salon du panneau', value: t.panneau ? `<#${t.panneau}>` : 'à régler avec `/tickets setup`', inline: true },
-      { name: '🏷️ Tes boutons', value: types.length
-        ? types.map((x, i) => `**${i + 1}.** ${x.emoji ? x.emoji + ' ' : ''}**${x.nom}**${x.desc ? ` — ${x.desc}` : ''}`).join('\n').slice(0, 900)
-        : 'aucun — le panneau affichera le bouton unique « 📩 Ouvrir un ticket »' },
-    )
-    .setFooter({ text: 'Otaku · 🎫 Système de tickets' });
-  const rows = [rang(new StringSelectMenuBuilder().setCustomId('cfg:tikw:mode').setPlaceholder('🕹️ Étape 1 — quel système de ticket ?')
-    .addOptions(
-      { label: '🎛️ Ticket Bouton', value: 'bouton', description: 'Un bouton par type de demande sous la carte' },
-      { label: '📋 Ticket Menu', value: 'menu', description: 'Un menu déroulant « Choisis le type de ta demande »' },
-    ))];
-  if (t.mode === 'bouton' || t.mode === 'menu') {
-    rows.push(rang(new StringSelectMenuBuilder().setCustomId('cfg:tikw:action').setPlaceholder('🔧 Étape 2 — que veux-tu faire ?')
+  const stylePret = t.mode === 'bouton' || t.mode === 'menu';
+  const vue = (t.vue === 'actions' && stylePret) ? 'actions' : 'style';
+
+  if (vue === 'actions') {
+    const style = t.mode === 'menu' ? '📋 Ticket Menu' : '🎛️ Ticket Bouton';
+    const embed = new EmbedBuilder().setColor(COULEUR)
+      .setTitle('🎫 Système de tickets — étape 2')
+      .setDescription([
+        note ? `**${note}**\n` : null,
+        `Style : **${style}** · **${types.length}** bouton(s) sur 6${types.length ? ` : ${types.map((x) => x.emoji ? `${x.emoji} ${x.nom}` : x.nom).join(' · ')}` : ''}${t.actif ? ' · ✅ actifs' : ''}.`,
+      ].filter(Boolean).join('\n'))
+      .setFooter({ text: 'Otaku · 🎫 Système de tickets · chaque action revient ici' });
+    const menu = rang(new StringSelectMenuBuilder().setCustomId('cfg:tikw:action').setPlaceholder('🔧 Que veux-tu faire ?')
       .addOptions(
         { label: '➕ Créer un nouveau bouton', value: 'nouveau', description: 'Une fenêtre : nom, emoji, description' },
         { label: '🗑️ Supprimer un bouton', value: 'supprimer', description: types.length ? `${types.length} bouton(s) au choix` : 'aucun bouton pour le moment' },
         { label: '✏️ Modifier le panneau', value: 'textes', description: 'Titre + texte, puis la carte part directement' },
         { label: '🧹 Réinitialiser les textes', value: 'reset', description: 'Revenir aux textes par défaut' },
         { label: '✅ Terminer — publier le panneau', value: 'finir', description: t.panneau ? `La carte part dans <#${t.panneau}>` : 'salon du panneau non réglé (/tickets setup)' },
-      )));
+      ));
+    const navigation = rang(bouton('cfg:tikw:style', 'Changer de style', '🕹️'), bouton('cfg:racine', 'Changer de rubrique', '🏠'));
+    return { embeds: [embed], components: [menu, navigation] };
   }
-  rows.push(rang(bouton('cfg:racine', 'Changer de rubrique', '🏠')));
-  return { embeds: [embed], components: rows };
+
+  const styleActuel = t.mode === 'menu' ? '📋 Ticket Menu' : (t.mode === 'bouton' ? '🎛️ Ticket Bouton' : null);
+  const embed = new EmbedBuilder().setColor(COULEUR)
+    .setTitle('🎫 Système de tickets — étape 1')
+    .setDescription([
+      note ? `**${note}**\n` : null,
+      styleActuel
+        ? `Actuellement : **${styleActuel}**. Choisis-le de nouveau pour continuer, ou change d\u2019avis.`
+        : 'Comme les grands bots, on commence par le style. Une carte après l\u2019autre — rien de tout fait.',
+    ].filter(Boolean).join('\n'))
+    .setFooter({ text: 'Otaku · 🎫 Système de tickets · aucune image, jamais' });
+  const menu = rang(new StringSelectMenuBuilder().setCustomId('cfg:tikw:mode').setPlaceholder('🕹️ Quel système de ticket ?')
+    .addOptions(
+      { label: '🎛️ Ticket Bouton', value: 'bouton', description: 'Un bouton par type de demande sous la carte' },
+      { label: '📋 Ticket Menu', value: 'menu', description: 'Un menu déroulant « Choisis le type de ta demande »' },
+    ));
+  return { embeds: [embed], components: [menu, rang(bouton('cfg:racine', 'Changer de rubrique', '🏠'))] };
 }
 
 /** Le petit écran « lequel on jette ? », avec retour propre. */
@@ -613,6 +620,7 @@ module.exports = {
     // ── navigation ──
     if (id === 'cfg:section' && interaction.isStringSelectMenu()) {
       stockage.majReglages(G, { cfgSection: interaction.values[0], cfgItem: null });
+      if (interaction.values[0] === 'tickets') stockage.majReglages(G, { tickets: { vue: 'style' } }); // l'assistant repart de son étape 1
       await rafraichir(interaction, null, true);   // on entre dans la rubrique : jamais la carte d'un réglage
       return true;
     }
@@ -867,10 +875,15 @@ module.exports = {
     // ── 🎫 Système de tickets : l'assistant en sous-menus (façon One Assist) ──
     if (id === 'cfg:tikw:mode' && interaction.isStringSelectMenu()) {
       const mode = interaction.values[0] === 'menu' ? 'menu' : 'bouton';
-      stockage.majReglages(G, { tickets: { mode } });
+      stockage.majReglages(G, { tickets: { mode, vue: 'actions' } });
       await montrer(mode === 'menu'
-        ? '📋 **Ticket Menu** choisi : un menu déroulant sous la carte. Étape 2 — les actions sont juste en dessous.'
-        : '🎛️ **Ticket Bouton** choisi : un bouton par type sous la carte. Étape 2 — les actions sont juste en dessous.');
+        ? '📋 **Ticket Menu** — un menu déroulant sous la carte. Étape 2 à toi.'
+        : '🎛️ **Ticket Bouton** — un bouton par type sous la carte. Étape 2 à toi.');
+      return true;
+    }
+    if (id === 'cfg:tikw:style') {
+      stockage.majReglages(G, { tickets: { vue: 'style' } });
+      await montrer(null);
       return true;
     }
     if (id === 'cfg:tikw:back') { await montrer(null); return true; }
