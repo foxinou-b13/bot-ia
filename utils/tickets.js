@@ -46,18 +46,25 @@ function reglages(guildId) {
 function parseTypes(liste) {
   const vus = new Set();
   const sur = [];
-  for (const brute of (liste || [])) {
-    const l = String(brute || '').trim();
-    if (!l) continue;
-    const m = l.match(/^([^\p{L}\p{N}]+)\s*(.+)$/u);
-    const emoji = m ? m[1].trim() : null;
-    const nom = ((m ? m[2] : l) || l).trim().slice(0, 40);
+  for (const entree of (liste || [])) {
+    let emoji = null, nom = '', desc = null;
+    if (entree && typeof entree === 'object') {
+      nom = String(entree.nom || '').trim().slice(0, 40);
+      emoji = entree.emoji ? String(entree.emoji).trim() : null;
+      desc = entree.desc ? String(entree.desc).trim().slice(0, 95) : null;
+    } else {
+      const l = String(entree || '').trim();
+      if (!l) continue;
+      const m = l.match(/^([^\p{L}\p{N}]+)\s*(.+)$/u);
+      emoji = m ? m[1].trim() : null;
+      nom = ((m ? m[2] : l) || l).trim().slice(0, 40);
+    }
     if (!nom) continue;
     let slug = nom.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '')
       .replace(/[^a-z0-9-]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 24) || `t${sur.length + 1}`;
     while (vus.has(slug)) slug += 'x';
     vus.add(slug);
-    sur.push({ emoji, nom, slug });
+    sur.push({ emoji, nom, desc, slug });
     if (sur.length >= 6) break;
   }
   return sur;
@@ -149,6 +156,7 @@ function panneauMessage(r, guildName) {
       .setPlaceholder('📋 Choisis le type de ta demande');
     for (const t of types) {
       const o = { label: t.nom.slice(0, 100), value: t.slug };
+      if (t.desc) o.description = t.desc;
       if (t.emoji) o.emoji = { name: t.emoji };
       menu.addOptions(o);
     }

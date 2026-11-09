@@ -388,40 +388,103 @@ test('bouton-type « tik:ouvrir:support » ouvre le même ticket marqué du moti
 });
 
 // ─── /config rubrique tickets ───
-test('/config tickets : 8 réglages guidés, carte d’état avec le format', () => {
+// ─── l'assistant /config : menus qui s'enchaînent (façon One Assist) ───
+async function tikCfg(props) {
   const configCmd = require('../commands/config');
+  const inter = {
+    guildId: G, inGuild: () => true,
+    isStringSelectMenu: () => Array.isArray(props.values),
+    isModalSubmit: () => Boolean(props.fields),
+    isButton: () => false, isChannelSelectMenu: () => false, isUserSelectMenu: () => false,
+    member: { permissions: { has: () => true } },
+    update: async (p) => { inter.last = p; }, reply: async (p) => { inter.last = p; },
+    showModal: async (m) => { inter.modal = m.toJSON(); },
+    ...props,
+    fields: props.fields ? { getTextInputValue: (k) => props.fields[k] || '' } : undefined,
+  };
+  await configCmd.composant(inter);
+  return inter;
+}
+
+test('étape 1 : la rubrique ouvre sur le choix Ticket Bouton / Ticket Menu, rien d\u2019autre', () => {
+  const configCmd = require('../commands/config');
+  stockage.majReglages(G, { tickets: { mode: null } });
   const carte = configCmd.carteRubrique(G, 'tickets', 'C1', null);
-  const menu = carte.components[0].toJSON().components[0];
-  assert.deepStrictEqual(menu.options.map((o) => o.value),
-    ['tickets:couper', 'tickets:format', 'tickets:categorie', 'tickets:panneau', 'tickets:logs', 'tickets:staff', 'tickets:types', 'tickets:textes']);
-  const champs = carte.embeds[0].toJSON().fields.map((f) => f.name);
-  assert.ok(champs.includes('🕹️ Format du panneau') && champs.includes('🏷️ Types'), champs.join('|'));
+  assert.deepStrictEqual(carte.components.map((r) => r.toJSON().components[0].custom_id), ['cfg:tikw:mode', 'cfg:racine']);
+  assert.deepStrictEqual(carte.components[0].toJSON().components[0].options.map((o) => o.value), ['bouton', 'menu']);
 });
 
-test('/config tickets : format, types et textes enregistrent vraiment', async () => {
+test('étape 2 : le style choisi fait apparaître le menu des actions', async () => {
   const configCmd = require('../commands/config');
-  const base = (customId, over = {}) => ({
-    customId, guildId: G, inGuild: () => true,
-    isStringSelectMenu: () => customId === 'cfg:tik:mode',
-    isChannelSelectMenu: () => false, isButton: () => !customId.includes('modal'),
-    member: { permissions: { has: () => true } },
-    update: async () => {}, reply: async () => {}, showModal: async () => {},
-    fields: { getTextInputValue: (k) => over[k] || '' },
-    values: over.values || [],
-    channels: { first: () => null }, roles: { first: () => null },
-    ...over.inter,
-  });
-  await configCmd.composant(base('cfg:tik:mode', { values: ['menu'] }));
-  assert.strictEqual(stockage.reglages(G).tickets.mode, 'menu');
-  await configCmd.composant(base('cfg:tik:toggle'));
-  assert.strictEqual(stockage.reglages(G).tickets.actif, false, 'toggle coupe');
-  await configCmd.composant(base('cfg:tik:types-modal', { types: '😀 Support\n🤝 Partenariat\n\n   \nX\nY\nZ\nW\nV' }));
-  assert.deepStrictEqual(stockage.reglages(G).tickets.types, ['😀 Support', '🤝 Partenariat', 'X', 'Y', 'Z', 'W'], '6 max, lignes vides jetées');
-  await configCmd.composant(base('cfg:tik:textes-modal', { titre: 'Le Comptoir', texte: 'Pose ta question ici.' }));
-  assert.strictEqual(stockage.reglages(G).tickets.titre, 'Le Comptoir');
-  assert.strictEqual(stockage.reglages(G).tickets.texte, 'Pose ta question ici.');
-  await configCmd.composant(base('cfg:tik:textes-off'));
-  assert.strictEqual(stockage.reglages(G).tickets.titre, null, '⌀ réinitialisé');
+  stockage.majReglages(G, { tickets: { mode: null } });
+  const i = await tikCfg({ customId: 'cfg:tikw:mode', values: ['menu'], update: async () => {} });
+  assert.strictEqual(stockage.reglages(G).tickets.mode, 'menu', 'le choix du style est enregistré');
+  const carte = configCmd.carteRubrique(G, 'tickets', 'C1', null);
+  assert.deepStrictEqual(carte.components.map((r) => r.toJSON().components[0].custom_id), ['cfg:tikw:mode', 'cfg:tikw:action', 'cfg:racine'], 'le menu des actions est apparu sous le choix');
+  assert.deepStrictEqual(carte.components[1].toJSON().components[0].options.map((o) => o.value),
+    ['nouveau', 'supprimer', 'textes', 'reset', 'finir']);
+});
+
+test('➕ Créer un nouveau bouton : la fenêtre s\u2019ouvre, le bouton est créé, on revient au menu', async () => {
+  stockage.majReglages(G, { tickets: { mode: 'bouton', types: [] } });
+  const a = await tikCfg({ customId: 'cfg:tikw:action', values: ['nouveau'] });
+  assert.strictEqual(a.modal.custom_id, 'cfg:tikw:btn-modal');
+  const champs = a.modal.components.map((r) => r.components[0]);
+  assert.deepStrictEqual(champs.map((c) => c.custom_id), ['nom', 'emoji', 'desc']);
+  assert.strictEqual(champs[0].required, true, 'le nom est obligatoire');
+
+  await tikCfg({ customId: 'cfg:tikw:btn-modal', fields: { nom: '  Partenariat ', emoji: '🤝', desc: 'devenir partenaire' } });
+  assert.deepStrictEqual(stockage.reglages(G).tickets.types, [{ nom: 'Partenariat', emoji: '🤝', desc: 'devenir partenaire' }]);
+
+  await tikCfg({ customId: 'cfg:tikw:btn-modal', fields: { nom: 'Réclamation' } });
+  assert.strictEqual(stockage.reglages(G).tickets.types[1].emoji, null, 'sans emoji, pas de emoji');
+
+  // six max
+  for (const x of ['a', 'b', 'c', 'd', 'e']) await tikCfg({ customId: 'cfg:tikw:btn-modal', fields: { nom: x } });
+  assert.strictEqual(stockage.reglages(G).tickets.types.length, 6, 'le 7e doit être refusé');
+  const plein = await tikCfg({ customId: 'cfg:tikw:action', values: ['nouveau'] });
+  assert.match(plein.last.embeds[0].toJSON().description, /Déjà 6 boutons/);
+});
+
+test('🗑️ Supprimer un bouton : on le choisit dans la liste, il part, retour propre', async () => {
+  stockage.majReglages(G, { tickets: { mode: 'bouton', types: [{ nom: 'Support', emoji: '😀', desc: 'technique' }, { nom: 'Partenariat' }] } });
+  const a = await tikCfg({ customId: 'cfg:tikw:action', values: ['supprimer'] });
+  const ids = a.last.components.map((r) => r.toJSON().components[0].custom_id);
+  assert.deepStrictEqual(ids, ['cfg:tikw:btn-del', 'cfg:tikw:back']);
+  const opts = a.last.components[0].toJSON().components[0].options;
+  assert.deepStrictEqual(opts.map((o) => o.value), ['0', '1']);
+  assert.strictEqual(opts[0].emoji.name, '😀');
+  await tikCfg({ customId: 'cfg:tikw:btn-del', values: ['0'] });
+  const reste = stockage.reglages(G).tickets.types;
+  assert.strictEqual(reste.length, 1, 'un seul bouton survit');
+  assert.strictEqual(reste[0].nom, 'Partenariat', 'c’est bien celui-là qui reste');
+});
+
+test('✏️ Modifier le panneau : la fenêtre, puis envoi direct dans le salon réglé — sans image', async () => {
+  const sent = [];
+  stockage.majReglages(G, { tickets: { actif: false, mode: 'menu', types: [{ nom: 'Support', desc: 'un souci technique' }], panneau: 'P-9', titre: null, texte: null } });
+  const a = await tikCfg({ customId: 'cfg:tikw:action', values: ['textes'] });
+  assert.strictEqual(a.modal.custom_id, 'cfg:tikw:pan-modal');
+  const guild = { name: 'G', channels: { fetch: async () => ({ id: 'P-9', send: async (p) => sent.push(p) }) } };
+  await tikCfg({ customId: 'cfg:tikw:pan-modal', guild, fields: { titre: 'Le Comptoir', texte: 'Viens comme tu es.' } });
+  const t = stockage.reglages(G).tickets;
+  assert.strictEqual(t.titre, 'Le Comptoir');
+  assert.strictEqual(t.texte, 'Viens comme tu es.', 'les deux champs sont enregistrés');
+  assert.strictEqual(sent.length, 1, 'le panneau est parti direct');
+  assert.strictEqual(sent[0].files, undefined, 'toujours zéro image');
+  const sel = sent[0].components[0].toJSON().components[0];
+  assert.strictEqual(sel.options[0].description, 'un souci technique', 'la description du bouton vit sous le choix du menu');
+  assert.strictEqual(t.actif, true, 'terminer/publier active les tickets');
+});
+
+test('🧹 Réinitialiser les textes et ✅ Terminer (sans salon → guidage, pas de crash)', async () => {
+  stockage.majReglages(G, { tickets: { titre: 'X', texte: 'Y' } });
+  await tikCfg({ customId: 'cfg:tikw:action', values: ['reset'] });
+  assert.strictEqual(stockage.reglages(G).tickets.titre, null);
+  stockage.majReglages(G, { tickets: { panneau: null, actif: false } });
+  const f = await tikCfg({ customId: 'cfg:tikw:action', values: ['finir'], guild: { name: 'G', channels: { fetch: async () => null } } });
+  assert.match(f.last.embeds[0].toJSON().description, /Aucun salon de panneau/, 'Terminer doit guider, pas planter');
+  assert.strictEqual(stockage.reglages(G).tickets.actif, false, 'sans envoi possible, on n’active pas');
 });
 
 // ─── exécution ───

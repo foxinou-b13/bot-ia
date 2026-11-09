@@ -178,13 +178,14 @@ Tape `/config` : un menu « Que veux-tu configurer ? » avec 7 sections ; chaque
 - **🤝 Assistant dans les tickets** : activer/couper, catégorie des tickets, panneau d'origine, rôle staff, salon d'alerte, questions fixes (une par ligne, 6 max).
 - **🎫 Tickets (système maison)** : interrupteur, **format du panneau (boutons ou menu déroulant)**, catégorie, salon du panneau, transcriptions, rôle staff, types de tickets (emoji + nom, 6 max), textes du panneau.
 
-## Formats du panneau de tickets (v1.5.0)
-Dans `/config` → **🎫 Tickets** → « 🕹️ Format du panneau », deux présentations comme les grands bots de tickets :
-- **🎛️ Boutons** : un bouton vert par type de demande (« 😀 Support », « 🤝 Partenariat »…) sous la carte ;
-- **📋 Menu** : un menu déroulant unique « Choisis le type de ta demande ».
-Règle les types dans « 🏷️ Les types de tickets » (un par ligne, emoji optionnel) ; sans types, le panneau affiche le bouton
-unique « 📩 Ouvrir un ticket ». Le motif choisi est noté dans le ticket et dans le journal du staff. Et toujours : **aucune image
-générée sous le panneau**.
+## L'assistant tickets dans /config (v1.6.0)
+`/config` → **🎫 Système de tickets** : plus rien à remplir à la main, des menus qui s'enchaînent comme chez les grands bots :
+1. **Étape 1** — choisis **🎛️ Ticket Bouton** (un bouton par type sous la carte) ou **📋 Ticket Menu** (un menu déroulant de types).
+2. **Étape 2** — un menu d'actions apparaît : **➕ Créer un nouveau bouton** (fenêtre : nom, emoji, description), **🗑️ Supprimer un
+   bouton** (on le choisit dans la liste), **✏️ Modifier le panneau** (fenêtre : titre + texte → « Envoyer » publie la carte
+   direct dans le salon du panneau), **🧹 Réinitialiser les textes**, et **✅ Terminer — publier le panneau** (active les tickets).
+Chaque action revient au menu avec un ✓ et la suite à faire. 6 boutons maximum, comme les grands. Les salons (catégorie,
+panneau, logs, rôle staff) se posent en une fois avec `/tickets setup`. **Jamais d'image générée sous le panneau.**
 
 ## Système de tickets maison (v1.4.0)
 Otaku gère ses propres tickets, sans dépendre d'un autre bot — `/tickets` :
