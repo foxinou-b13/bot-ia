@@ -109,6 +109,43 @@ async function modererAutomatiquement(message, reglages) {
   return analyse;
 }
 
+// Salutations « je suis là » : une rotation, jamais la même deux fois de suite.
+const SALUTS = [
+  'Je suis là ! Pose ta question juste après mon prénom : « ota, explique-moi les threads ».',
+  'Présent. Question, conseil, résumé, traduction — demande, je réponds.',
+  'À ton écoute ! Écris « ota » + ta question, ou passe par /ask.',
+  'Salut ! Je réponds aux questions du serveur, dans ta langue. Qu’est-ce que tu veux savoir ?',
+  'Mode écoute activé 🎧 — vas-y, pose ta question.',
+  'Pas besoin de mention : « ota, … » et je débarque. Qu’est-ce que je peux faire pour toi ?',
+];
+const DERNIER_SALUT = new Map();
+function salutVariation(guildId) {
+  let idx = Math.floor(Math.random() * SALUTS.length);
+  if (idx === DERNIER_SALUT.get(guildId)) idx = (idx + 1) % SALUTS.length;
+  DERNIER_SALUT.set(guildId, idx);
+  return SALUTS[idx];
+}
+
+// Questions posées « à voix haute » sans ping : vraies questions seulement, pause de 20 s par salon.
+const PAUSE_SANS_PING_MS = 20000;
+const DERNIER_SANS_PING = new Map();
+function questionSansPing(message, iaR, texteNu) {
+  if (iaR.active === false || iaR.repondreQuestions === false) return null;
+  if ((iaR.salonBloques || []).includes(message.channel.id)) return null;
+  const t = String(texteNu || '');
+  if (t.length < 8 || t.length > 350) return null;
+  if (message.mentions?.everyone) return null;
+  if ((message.mentions?.roles?.size || 0) > 0 || (message.mentions?.users?.size || 0) > 0) return null;
+  if (/@(?:everyone|here)|discord\.gg\//i.test(t)) return null;
+  const interrogatif = /\?\s*$/.test(t)
+    || /^(?:qui |que |quoi\b|quel|quelle|quels|quelles|comment|pourquoi|quand|combien|o[uù]\b|est[- ]ce que|est ce que|peut[- ]on|puis[- ]je|dois[- ]je|faut[- ]il|sais[- ]tu|savez[- ]vous|on peut|il y a|y a|c'?est quoi|tu connais|tu sais)/i.test(t);
+  if (!interrogatif) return null;
+  const maintenant = Date.now();
+  if (maintenant - (DERNIER_SANS_PING.get(message.channel.id) || 0) < PAUSE_SANS_PING_MS) return null;
+  DERNIER_SANS_PING.set(message.channel.id, maintenant);
+  return t;
+}
+
 module.exports = {
   nom: Events.MessageCreate,
 
@@ -161,14 +198,32 @@ module.exports = {
       if (analyse) return;
     }
 
-    // ─── 2. IA sur mention ───
-    if (!client.user || !message.mentions.has(client.user.id)) return;
-    if (message.content.replace(/<@!?\d+>/g, '').trim().length === 0) {
-      return message.reply({ embeds: [panneaux.info('👋 Je suis là', 'Mentionne-moi avec une question : « @Otaku explique-moi les threads ».')] })
-        .catch(() => null);
-    }
+    // ─── 2. Otaku est-il sollicité ? (mention, le mot « ota », ou une vraie question posée à voix haute) ───
+    const texteNu = message.content.replace(/<@!?\d+>/g, ' ').replace(/\s+/g, ' ').trim();
+    const estMention = Boolean(client.user && message.mentions.has(client.user.id));
+    const motCle = /^o ?ta(?:ku|k|['’])?\b/i.test(texteNu);
+    const interpele = estMention || motCle;
 
-    const question = message.content.replace(/<@!?\d+>/g, '').trim();
+    // ─── 2a. appel d'un membre (« ota, appelle Jordan ») ───
+    try {
+      const appels = require('../utils/appels');
+      if (await appels.traiterMessage(message, reglages.ia || {}, { interpele })) return;
+    } catch (erreur) { console.warn('⚠️ Appel membre :', erreur.message); }
+
+    let question = null;
+    if (interpele) {
+      question = estMention
+        ? message.content.replace(/<@!?\d+>/g, ' ').replace(/\s+/g, ' ').trim()
+        : texteNu.replace(/^o ?ta(?:ku|k|['’])?\b[ ,.;:!]*/i, '').trim();
+      if (!question) {
+        // juste « ota » ou une mention seule : on répond, et JAMAIS deux fois la même phrase
+        return message.reply({ embeds: [panneaux.info('👋 Je suis là', salutVariation(message.guild.id))] })
+          .catch(() => null);
+      }
+    } else {
+      question = questionSansPing(message, reglages.ia || {}, texteNu);
+      if (!question) return;
+    }
 
     // ─── sécurité pro : filtre avant appel IA (réglages + salon + sujet) ───
     const acces = securite.verifierAcces(message.guild.id, message.channel.id, question);

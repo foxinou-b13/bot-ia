@@ -146,6 +146,14 @@ const RUBRIQUES = {
         label: '🧠 Oublier la conversation',
         desc: 'Efface la mémoire de l\'IA pour CE salon : elle repart de zéro (utile après une conversation partie en vrille).',
       },
+      sansPing: {
+        label: '📣 Répondre sans être pingé',
+        desc: 'Otaku répond aussi aux vraies questions posées dans le salon, sans « ota » ni mention (pause de 20 s par salon, jamais sur les phrases ordinaires).',
+      },
+      appels: {
+        label: '🫵 Appeler un membre',
+        desc: '« ota, appelle Jordan » : il demande la raison, fait choisir parmi les homonymes dans un menu privé, puis prévient la bonne personne proprement.',
+      },
     },
   },
 };
@@ -255,6 +263,8 @@ function carteRubrique(G, sec, channelId, note) {
     embed.addFields(
       { name: '🤖 État pour ce salon', value: iaR.active === false ? '🔇 coupée partout' : (coupeeIci ? '🔇 coupée ici' : '🟢 active ici'), inline: true },
       { name: '🎭 Personnalité', value: iaR.consigne ? `> ${String(iaR.consigne).slice(0, 90)}` : 'standard', inline: true },
+      { name: '📣 Sans ping', value: iaR.repondreQuestions === false ? '⬜ questions ignorées' : '✅ répond aux questions', inline: true },
+      { name: '🫵 Appels de membres', value: iaR.appels === false ? '⬜ coupés' : '✅ « ota, appelle X »', inline: true },
     );
   }
   const menu = rang(new StringSelectMenuBuilder()
@@ -372,6 +382,14 @@ function carteReglage(G, sec, cle, channelId, note = null, opts = {}) {
     rows.push(rang(bouton('cfg:perso', 'Écrire la personnalité', '🎭', ButtonStyle.Primary)));
   } else if (sec === 'ia' && cle === 'memo') {
     rows.push(rang(bouton('cfg:memo', 'Oublier la conversation de CE salon', '🧠', ButtonStyle.Danger)));
+  } else if (sec === 'ia' && cle === 'sansPing') {
+    const on = iaR.repondreQuestions !== false;
+    valeurActuelle(embed, on ? '✅ Actif — je réponds aux vraies questions posées sans ping' : '⬜ Inactif — il faut « ota » ou une mention pour m\'avoir');
+    rows.push(rang(bouton('cfg:ia-sp', on ? 'Couper les réponses sans ping' : 'Autoriser les réponses sans ping', on ? '🔇' : '📣', on ? ButtonStyle.Danger : ButtonStyle.Success)));
+  } else if (sec === 'ia' && cle === 'appels') {
+    const on = iaR.appels !== false;
+    valeurActuelle(embed, on ? '✅ Actif — « ota, appelle Jordan » me fait passer le message' : '⬜ Inactif — je ne transmets plus les demandes de ping');
+    rows.push(rang(bouton('cfg:ia-ap', on ? 'Couper les appels de membres' : 'Autoriser les appels de membres', on ? '🔇' : '🫵', on ? ButtonStyle.Danger : ButtonStyle.Success)));
   }
   rows.push(boutonRetour());
   return { embeds: [embed], components: rows };
@@ -668,6 +686,18 @@ module.exports = {
     if (id === 'cfg:memo') {
       ia.oublier(G, interaction.channelId);
       return montrer('🧠 Mémoire du salon oubliée.');
+    }
+    if (id === 'cfg:ia-sp') {
+      const on = (stockage.reglages(G).ia || {}).repondreQuestions !== false;
+      return maj({ ia: { repondreQuestions: !on } }, on
+        ? '🔇 Je ne répondrai plus aux questions sans ping — « ota » ou mention obligatoire.'
+        : '📣 Je réponds aussi aux vraies questions posées sans me pinguer.');
+    }
+    if (id === 'cfg:ia-ap') {
+      const on = (stockage.reglages(G).ia || {}).appels !== false;
+      return maj({ ia: { appels: !on } }, on
+        ? '🔇 Appels de membres coupés.'
+        : '🫵 Appels activés : « ota, appelle X » marche à nouveau.');
     }
 
     await montrer(null);

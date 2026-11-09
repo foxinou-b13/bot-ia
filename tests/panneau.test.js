@@ -317,6 +317,29 @@ test('une rubrique périmée en mémoire retombe sur l’accueil sans crash', ()
   assert.ok(carte.embeds[0].toJSON().title.includes('Accueil'), 'carte par défaut attendue');
 });
 
+test('carte rubrique IA : le menu propose les 5 réglages (nouveau : sans ping, appels)', () => {
+  const carte = config.carteRubrique(G, 'ia', 'C1', null);
+  const menu = carte.components[0].toJSON().components[0];
+  assert.deepStrictEqual(menu.options.map((o) => o.value),
+    ['ia:ici', 'ia:personnalite', 'ia:memo', 'ia:sansPing', 'ia:appels']);
+});
+
+test('réglage « sans ping » : le bouton coupe et rallume vraiment', async () => {
+  const avant = stockage.reglages(G).ia.repondreQuestions !== false;
+  await config.composant(menuFactice({ customId: 'cfg:ia-sp', kind: 'button' }));
+  assert.strictEqual(stockage.reglages(G).ia.repondreQuestions, !avant, 'le premier clic doit inverser');
+  await config.composant(menuFactice({ customId: 'cfg:ia-sp', kind: 'button' }));
+  assert.strictEqual(stockage.reglages(G).ia.repondreQuestions, avant, 'le second clic doit revenir');
+});
+
+test('réglage « appels » : actif par défaut, le bouton coupe et rallume', async () => {
+  assert.notStrictEqual(stockage.reglages(G).ia.appels, false, 'les appels sont actifs par défaut');
+  await config.composant(menuFactice({ customId: 'cfg:ia-ap', kind: 'button' }));
+  assert.strictEqual(stockage.reglages(G).ia.appels, false);
+  await config.composant(menuFactice({ customId: 'cfg:ia-ap', kind: 'button' }));
+  assert.strictEqual(stockage.reglages(G).ia.appels, true);
+});
+
 module.exports = { nom: 'panneau', cas };
 
 if (require.main === module) require('./executeur')(module.exports);

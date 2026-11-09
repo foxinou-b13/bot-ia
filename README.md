@@ -176,6 +176,20 @@ Tape `/config` : un menu « Que veux-tu configurer ? » avec 5 sections ; chaque
 - **⚖️ Sanctions** : punition automatique après X avertissements.
 - **🤖 IA** : couper/réactiver par salon, personnalité (formulaire), oublier la mémoire.
 
+## Répondre à voix haute et appeler un membre (v1.8.0)
+
+- **Plus besoin d'être pingué** : écris « **ota**, ta question » et Otaku répond (mention toujours acceptée aussi).
+- **« ota » tout seul** ne renvoie jamais la même formule deux fois de suite — fini le robot répété.
+- **Questions sans ping** : si le réglage est actif (`/config` → 🤖 IA → 📣 Répondre sans être pingé),
+  une vraie question posée dans le salon (« comment on… ? », « pourquoi… ? ») reçoit une réponse.
+  Jamais sur les phrases ordinaires, pause de 20 s par salon, les salons coupés restent silencieux.
+- **🫵 Appeler un membre** : « ota, appelle Jordan » → Otaku demande **la raison** (obligatoire, elle reste
+  dans le message), cherche les prénoms qui ressemblent, fait choisir dans un **menu privé** s'ils sont
+  plusieurs, puis écrit dans le salon : « 📣 @Jordan — X te cherche : "raison" ». Les bots et soi-même
+  ne sont jamais pingés ; une ligne sobre part au journal du staff. Tout se règle dans
+  `/config` → 🤖 IA → 🫵 Appeler un membre.
+- La consigne de l'IA interdit désormais de répéter une réponse mot pour mot : reformulation obligatoire.
+
 ## /guide (public)
 Carte des repères (règles, contact du staff, accueil). L'IA (`/ask`, mention) reçoit les mêmes liens et répond
 « voici le salon » à toute question du type « qui contacter ? ». Rien n'est inventé : que les salons réglés dans /config.
