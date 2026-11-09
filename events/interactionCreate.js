@@ -12,28 +12,6 @@ module.exports = {
 
   async executer(client, interaction) {
     // ─── menus déroulants, boutons, sélecteurs ───
-    // Système de tickets natif : ses boutons et son modal, traités en priorité (hors commandes).
-    if ((interaction.isButton?.() || interaction.isModalSubmit?.() || interaction.isStringSelectMenu?.()) && String(interaction.customId || '').startsWith('tik:')) {
-      try {
-        await require('../utils/tickets').composant(interaction);
-      } catch (erreur) {
-        console.error('⚠️ Bouton tickets :', erreur.message);
-        await interaction.reply({ content: '❌ Petit souci de mon côté — réessaie, ou préviens un administrateur.', flags: MessageFlags.Ephemeral }).catch(() => null);
-      }
-      return;
-    }
-
-    // Boutons de l'assistant de tickets : traités en priorité (hors commandes).
-    if (interaction.isButton?.() && String(interaction.customId || '').startsWith('asst:')) {
-      try {
-        await require('../utils/assistant-ticket').traiterBouton(interaction);
-      } catch (erreur) {
-        console.error('⚠️ Bouton assistant :', erreur.message);
-        await interaction.reply({ content: '❌ Petit souci de mon côté — préviens un administrateur.', flags: MessageFlags.Ephemeral }).catch(() => null);
-      }
-      return;
-    }
-
     if (interaction.isMessageComponent?.() || interaction.isModalSubmit?.()) {
       // isMessageComponent couvre TOUS les composants : boutons, menus texte/salon/rôle/utilisateur/membles.
       // (Un ancien oubli du sélecteur de rôle faisait « l'application n'a pas répondu » — ne jamais retirer.)

@@ -148,43 +148,6 @@ const RUBRIQUES = {
       },
     },
   },
-  assistant: {
-    label: '🤝 Assistant dans les tickets',
-    aide: 'Otaku accueille dans les tickets, questionne, résume pour le staff',
-    intro: 'Quand un membre ouvre un ticket (créé par n\'importe quel bot de tickets), Otaku l\'accueil à la place du staff arrivant : il pose les questions utiles, demande si c\'est tout, puis publie un **récapitulatif propre** pour le staff. Un clic « 🙌 Je prends en charge » et il se retire pour de bon.',
-    items: {
-      couper: {
-        label: '🎛️ Activer ou couper',
-        desc: 'L\'interrupteur général. Coupé, Otaku ne dit plus rien dans les tickets, même si tout le reste est réglé.',
-      },
-      categorie: {
-        label: '📁 Catégorie des tickets',
-        desc: 'La catégorie SOUS LAQUELLE les salons de ticket sont créés. C\'est comme ça qu\'Otaku les reconnaît — choisis-la dans le menu (les salons de sa catégorie déclenchent l\'assistant).',
-      },
-      panneau: {
-        label: '🧾 Salon du panneau de tickets',
-        desc: 'Facultatif : le salon où se trouve le panneau « ouvrir un ticket ». Otaku le cite en pied de récapitulatif pour que le staff retrouve l\'origine.',
-      },
-      staff: {
-        label: '🧑‍💼 Rôle du staff',
-        desc: 'Un seul rôle. Dès qu\'un membre portant ce rôle écrit dans le ticket, Otaku s\'arrête net et livre son récapitulatif : « le staff est là, je file ». (Les détenteurs de « Gérer les messages » comptent aussi comme staff.)',
-      },
-      alerte: {
-        label: '📣 Salon d\'alerte',
-        desc: 'Si le membre demande un humain (ou ne répond plus du tout), Otaku prévient ici. Idéalement un salon privé du staff. Sans réglage, il se contente du récapitulatif dans le ticket.',
-      },
-      questions: {
-        label: '❓ Les questions à poser',
-        desc: 'Une par ligne (6 maximum) : exactement ce que ton staff demande d\'habitude. Vide = Otaku improvise les questions avec l\'IA (et redemande « c\'est tout ? » à la fin).',
-      },
-    },
-  },
-  tickets: {
-    label: '🎫 Système de tickets',
-    aide: 'Choisis Ticket Bouton ou Ticket Menu, puis suis l\u2019assistant pas à pas',
-    intro: 'Le système de tickets d\u2019Otaku, comme les grands bots : d\u2019abord le **style** (🎛️ boutons par type ou 📋 menu déroulant), puis l\u2019assistant guide pas à pas — créer un bouton, en supprimer un, modifier les textes du panneau, et « ✅ Terminer » qui publie la carte. Les salons (catégorie, panneau, logs, rôle staff) se posent en une fois avec `/tickets setup`. Et jamais d\u2019image générée : c\u2019est le contrat.',
-    items: {},
-  },
 };
 
 const SECTIONS = Object.entries(RUBRIQUES).map(([valeur, r]) => ({ valeur, label: r.label, aide: r.aide }));
@@ -251,110 +214,9 @@ function journalActif(r) {
     : (actifs.length ? `📝 ${actifs.map((c) => NOMS_JOURNAL[c]).join(' · ')}` : '🔇 rien de plus que les sanctions');
 }
 
-/** Les boutons du panneau, au format interne unique : { nom, emoji, desc }. */
-function listeTypes(t) {
-  return (t.types || []).map((x) => (typeof x === 'string'
-    ? (require('../utils/tickets').parseTypes([x])[0] || { nom: x, emoji: null, desc: null, slug: 'x' })
-    : { nom: x.nom || 'Sans nom', emoji: x.emoji || null, desc: x.desc || null, slug: '' }));
-}
-
-/**
- * La carte de la rubrique 🎫 : deux menus qui s'enchaînent, comme les grands bots.
- * Étape 1 : 🎛️ Ticket Bouton / 📋 Ticket Menu. Étape 2 : les actions
- * (créer un bouton, en supprimer, textes du panneau, publier) — chaque action
- * revient ici, avec un ✓ et ce qui reste à faire.
- */
-/**
- * La rubrique 🎫 est un assistant : chaque menu a SA carte, une étape à la fois.
- * Étape 1 (style) → clic → Étape 2 (actions) → chaque action revient à l'étape 2.
- * L'étape affichée est mémorisée par serveur (tickets.vue), comme le reste de /config.
- */
-function carteTicketWizard(G, note = null) {
-  const t = stockage.reglages(G).tickets || {};
-  const types = listeTypes(t);
-  const stylePret = t.mode === 'bouton' || t.mode === 'menu';
-  const vue = (t.vue === 'actions' && stylePret) ? 'actions' : 'style';
-
-  if (vue === 'actions') {
-    const style = t.mode === 'menu' ? '📋 Ticket Menu' : '🎛️ Ticket Bouton';
-    const embed = new EmbedBuilder().setColor(COULEUR)
-      .setTitle('🎫 Système de tickets — étape 2')
-      .setDescription([
-        note ? `**${note}**\n` : null,
-        `Style : **${style}** · **${types.length}** bouton(s) sur 6${types.length ? ` : ${types.map((x) => x.emoji ? `${x.emoji} ${x.nom}` : x.nom).join(' · ')}` : ''}${t.actif ? ' · ✅ actifs' : ''}.`,
-      ].filter(Boolean).join('\n'))
-      .setFooter({ text: 'Otaku · 🎫 Système de tickets · chaque action revient ici' });
-    const menu = rang(new StringSelectMenuBuilder().setCustomId('cfg:tikw:action').setPlaceholder('🔧 Que veux-tu faire ?')
-      .addOptions(
-        { label: '➕ Créer un nouveau bouton', value: 'nouveau', description: 'Une fenêtre : nom, emoji, description' },
-        { label: '🗑️ Supprimer un bouton', value: 'supprimer', description: types.length ? `${types.length} bouton(s) au choix` : 'aucun bouton pour le moment' },
-        { label: '✏️ Modifier le panneau', value: 'textes', description: 'Titre + texte, puis la carte part directement' },
-        { label: '🧹 Réinitialiser les textes', value: 'reset', description: 'Revenir aux textes par défaut' },
-        { label: '✅ Terminer — publier le panneau', value: 'finir', description: t.panneau ? `La carte part dans <#${t.panneau}>` : 'salon du panneau non réglé (/tickets setup)' },
-      ));
-    const navigation = rang(bouton('cfg:tikw:style', 'Changer de style', '🕹️'), bouton('cfg:racine', 'Changer de rubrique', '🏠'));
-    return { embeds: [embed], components: [menu, navigation] };
-  }
-
-  const styleActuel = t.mode === 'menu' ? '📋 Ticket Menu' : (t.mode === 'bouton' ? '🎛️ Ticket Bouton' : null);
-  const embed = new EmbedBuilder().setColor(COULEUR)
-    .setTitle('🎫 Système de tickets — étape 1')
-    .setDescription([
-      note ? `**${note}**\n` : null,
-      styleActuel
-        ? `Actuellement : **${styleActuel}**. Choisis-le de nouveau pour continuer, ou change d\u2019avis.`
-        : 'Comme les grands bots, on commence par le style. Une carte après l\u2019autre — rien de tout fait.',
-    ].filter(Boolean).join('\n'))
-    .setFooter({ text: 'Otaku · 🎫 Système de tickets · aucune image, jamais' });
-  const menu = rang(new StringSelectMenuBuilder().setCustomId('cfg:tikw:mode').setPlaceholder('🕹️ Quel système de ticket ?')
-    .addOptions(
-      { label: '🎛️ Ticket Bouton', value: 'bouton', description: 'Un bouton par type de demande sous la carte' },
-      { label: '📋 Ticket Menu', value: 'menu', description: 'Un menu déroulant « Choisis le type de ta demande »' },
-    ));
-  return { embeds: [embed], components: [menu, rang(bouton('cfg:racine', 'Changer de rubrique', '🏠'))] };
-}
-
-/** Le petit écran « lequel on jette ? », avec retour propre. */
-function carteSupprBouton(G) {
-  const t = stockage.reglages(G).tickets || {};
-  const types = listeTypes(t);
-  const embed = new EmbedBuilder().setColor(COULEUR).setTitle('🗑️ Supprimer un bouton')
-    .setDescription(types.length ? `${types.map((x, i) => `**${i + 1}.** ${x.emoji ? x.emoji + ' ' : ''}${x.nom}`).join('\n')}\n\n👇 Choisis celui à jeter.` : 'Aucun bouton à supprimer pour le moment.')
-    .setFooter({ text: 'Otaku · 🎫 Système de tickets' });
-  const rows = [];
-  if (types.length) {
-    const menu = new StringSelectMenuBuilder().setCustomId('cfg:tikw:btn-del').setPlaceholder('🗑️ Quel bouton supprimer ?');
-    types.forEach((x, i) => {
-      const o = { label: String(x.nom).slice(0, 95), value: String(i) };
-      if (x.desc) o.description = String(x.desc).slice(0, 95);
-      if (x.emoji) o.emoji = { name: x.emoji };
-      menu.addOptions(o);
-    });
-    rows.push(rang(menu));
-  }
-  rows.push(rang(bouton('cfg:tikw:back', '← Revenir à l\u2019assistant', '↩️')));
-  return { embeds: [embed], components: rows };
-}
-
-/** « ✅ Terminer » (et l'envoi après modification des textes) : publier la carte et activer. */
-async function publierPanneauAssistant(interaction, G) {
-  const tik = require('../utils/tickets');
-  const t = tik.reglages(G);
-  if (!t.panneau) return '⚠️ Aucun salon de panneau réglé — lance `/tickets setup`, puis reviens publier ici.';
-  let salon = null;
-  try { salon = await interaction.guild?.channels?.fetch?.(t.panneau); } catch { salon = null; }
-  if (!salon) return '❌ Impossible de retrouver le salon du panneau — vérifie le réglage.';
-  try {
-    await salon.send(tik.panneauMessage(t, interaction.guild?.name));
-    stockage.majReglages(G, { tickets: { actif: true } });
-    return `📤 Panneau publié dans <#${t.panneau}> et tickets activés.`;
-  } catch { return '❌ Envoi impossible — vérifie mes permissions dans ce salon.'; }
-}
-
 function carteRubrique(G, sec, channelId, note) {
   const r = stockage.reglages(G);
-  const rub = RUBRIQUES[sec];
-  if (sec === 'tickets') return carteTicketWizard(G, note);
+  const rub = RUBRIQUES[sec] || RUBRIQUES.accueil; // rubrique disparue (ex. ancien réglage) → on retombe sur l'accueil
   const embed = new EmbedBuilder().setColor(COULEUR).setTitle(rub.label).setDescription(
     [note ? `**${note}**\n` : null, rub.intro, '\n👇 Choisis le réglage que tu veux changer — il aura sa propre carte.']
       .filter(Boolean).join('\n'),
@@ -387,16 +249,7 @@ function carteRubrique(G, sec, channelId, note) {
       name: '⚖️ Formule actuelle',
       value: a.sanctionAuto ? `**${a.seuilAvert || 3}** avertissement(s) → sourdine **${a.dureeSanction || 60} min**` : '_désactivée — les avertissements s\'empilent sans effet_',
     });
-  } else if (sec === 'assistant') {
-    const as = r.assistant || {};
-    const nb = (as.questions || []).filter(Boolean).length;
-    embed.addFields(
-      { name: '🎛️ Interrupteur', value: as.actif ? '✅ actif' : '⬜ coupé', inline: true },
-      { name: '📁 Catégorie', value: as.categorie ? `<#${as.categorie}>` : VIDE, inline: true },
-      { name: '❓ Questions', value: nb ? `${nb} sur 6 réglées` : 'improvisées par l\u2019IA', inline: true },
-      { name: '📣 Alerte', value: as.alerte ? `<#${as.alerte}>` : 'récap dans le ticket seulement', inline: true },
-    );
-    } else if (sec === 'ia') {
+  } else if (sec === 'ia') {
     const iaR = r.ia || {};
     const coupeeIci = Boolean(channelId && (iaR.salonBloques || []).includes(channelId));
     embed.addFields(
@@ -519,44 +372,7 @@ function carteReglage(G, sec, cle, channelId, note = null, opts = {}) {
     rows.push(rang(bouton('cfg:perso', 'Écrire la personnalité', '🎭', ButtonStyle.Primary)));
   } else if (sec === 'ia' && cle === 'memo') {
     rows.push(rang(bouton('cfg:memo', 'Oublier la conversation de CE salon', '🧠', ButtonStyle.Danger)));
-  } else if (sec === 'assistant' && cle === 'couper') {
-    const as = r.assistant || {};
-    valeurActuelle(embed, as.actif ? '✅ actif — Otaku accueille dans les tickets' : '⬜ coupé');
-    rows.push(rang(bouton('cfg:asst:toggle', as.actif ? 'Couper l\'assistant' : 'Activer l\'assistant', as.actif ? '🔕' : '🟢',
-      as.actif ? ButtonStyle.Danger : ButtonStyle.Success)));
-  } else if (sec === 'assistant' && cle === 'categorie') {
-    const as = r.assistant || {};
-    valeurActuelle(embed, as.categorie ? `<#${as.categorie}>` : '🔇 aucune — l\'assistant ne saura pas reconnaître les tickets');
-    rows.push(rang(new ChannelSelectMenuBuilder().setCustomId('cfg:asst:categorie')
-      .setPlaceholder('📁 La catégorie où les salons de ticket sont créés')
-      .addChannelTypes(ChannelType.GuildCategory)));
-    rows.push(rang(bouton('cfg:asst:categorie-off', 'Retirer la catégorie', '🧹')));
-  } else if (sec === 'assistant' && cle === 'panneau') {
-    const as = r.assistant || {};
-    valeurActuelle(embed, as.panneau ? `<#${as.panneau}>` : null);
-    rows.push(rang(new ChannelSelectMenuBuilder().setCustomId('cfg:asst:panneau')
-      .setPlaceholder('🧾 Le salon du panneau de tickets (facultatif)')
-      .addChannelTypes(ChannelType.GuildText, ChannelType.GuildAnnouncement)));
-  } else if (sec === 'assistant' && cle === 'staff') {
-    const as = r.assistant || {};
-    valeurActuelle(embed, as.staffRole ? `<@&${as.staffRole}>` : '👥 juste « Gérer les messages » compte comme staff');
-    rows.push(rang(new RoleSelectMenuBuilder().setCustomId('cfg:asst:staff')
-      .setPlaceholder('🧑‍💼 Le rôle qui dit à Otaku de se retirer')));
-    rows.push(rang(bouton('cfg:asst:staff-off', 'Retirer le rôle', '🧹')));
-  } else if (sec === 'assistant' && cle === 'alerte') {
-    const as = r.assistant || {};
-    valeurActuelle(embed, as.alerte ? `<#${as.alerte}>` : null);
-    rows.push(rang(new ChannelSelectMenuBuilder().setCustomId('cfg:asst:alerte')
-      .setPlaceholder('📣 Où prévenir quand le membre veut un humain')
-      .addChannelTypes(ChannelType.GuildText)));
-  } else if (sec === 'assistant' && cle === 'questions') {
-    const as = r.assistant || {};
-    const qs = (as.questions || []).filter(Boolean);
-    valeurActuelle(embed, qs.length ? qs.map((q, i) => `**${i + 1}.** ${q}`.slice(0, 150)).join('\n').slice(0, 900) : null);
-    rows.push(rang(bouton('cfg:asst:questions', 'Écrire les questions', '✏️', ButtonStyle.Primary),
-      bouton('cfg:asst:questions-off', 'Laisser l\'IA improviser', '🪄')));
   }
-
   rows.push(boutonRetour());
   return { embeds: [embed], components: rows };
 }
@@ -620,7 +436,6 @@ module.exports = {
     // ── navigation ──
     if (id === 'cfg:section' && interaction.isStringSelectMenu()) {
       stockage.majReglages(G, { cfgSection: interaction.values[0], cfgItem: null });
-      if (interaction.values[0] === 'tickets') stockage.majReglages(G, { tickets: { vue: 'style' } }); // l'assistant repart de son étape 1
       await rafraichir(interaction, null, true);   // on entre dans la rubrique : jamais la carte d'un réglage
       return true;
     }
@@ -820,142 +635,6 @@ module.exports = {
       const [seuil, duree] = valeur.split(':').map(Number);
       return maj({ automod: { sanctionAuto: true, seuilAvert: seuil, dureeSanction: duree } },
         `⚖️ Activé : **${seuil} avertissement(s) → sourdine ${duree} min**.`);
-    }
-
-    // ── assistant de tickets ──
-    if (id === 'cfg:asst:toggle') {
-      const as = stockage.reglages(G).assistant || {};
-      return maj({ assistant: { actif: !as.actif } },
-        as.actif ? '🔕 Assistant coupé — Otaku n\u2019interviendra plus dans les tickets.'
-                 : '🟢 Assistant activé — il accueille désormais dans les salons de la catégorie réglée.');
-    }
-    if (id === 'cfg:asst:categorie' && interaction.isChannelSelectMenu()) {
-      const salon = interaction.channels.first();
-      return maj({ assistant: { categorie: salon ? salon.id : null } },
-        salon ? `📁 Tickets reconnus : tout salon créé sous <#${salon.id}> (id).` : '✅ Catégorie mise à jour.');
-    }
-    if (id === 'cfg:asst:categorie-off') return maj({ assistant: { categorie: null } }, '🧹 Catégorie retirée — l\u2019assistant ne reconnaîtra plus les tickets.');
-    if (id === 'cfg:asst:panneau' && interaction.isChannelSelectMenu()) {
-      const salon = interaction.channels.first();
-      return maj({ assistant: { panneau: salon ? salon.id : null } }, salon ? `🧾 Panneau noté : <#${salon.id}>.` : '✅ Retiré.');
-    }
-    if (id === 'cfg:asst:staff') {
-      const role = interaction.roles?.first?.() || null;
-      return maj({ assistant: { staffRole: role ? role.id : null } },
-        role ? `🧑‍💼 Dès que « ${role.name} » écrit dans un ticket, Otaku livrera son récapitulatif et se retirera.` : '✅ Rôle mis à jour.');
-    }
-    if (id === 'cfg:asst:staff-off') return maj({ assistant: { staffRole: null } }, '🧹 Rôle staff retiré — seuls les « Gérer les messages » compteront.');
-    if (id === 'cfg:asst:alerte' && interaction.isChannelSelectMenu()) {
-      const salon = interaction.channels.first();
-      return maj({ assistant: { alerte: salon ? salon.id : null } },
-        salon ? `📣 Alertes envoyées dans <#${salon.id}>.` : '✅ Alerte retirée — le récap restera dans le ticket.');
-    }
-    if (id === 'cfg:asst:questions') {
-      const actuelle = (stockage.reglages(G).assistant || {}).questions || [];
-      const modal = new ModalBuilder().setCustomId('cfg:asst:questions-modal').setTitle('❓ Questions de l\u2019assistant');
-      const champ = new TextInputBuilder()
-        .setCustomId('questions')
-        .setLabel('Une question par ligne (6 max)')
-        .setPlaceholder('Quel est le problème exactement ?\nDepuis quand ça dure ?\nQu\u2019attends-tu du staff ?')
-        .setStyle(TextInputStyle.Paragraph).setMaxLength(1000).setRequired(false)
-        .setValue(actuelle.join('\n').slice(0, 1000));
-      modal.addComponents(new ActionRowBuilder().addComponents(champ));
-      await interaction.showModal(modal).catch(() => null);
-      return true;
-    }
-    if (id === 'cfg:asst:questions-modal') {
-      const brut = String(interaction.fields?.getTextInputValue('questions') || '');
-      const questions = brut.split('\n').map((q) => q.trim()).filter(Boolean).slice(0, 6);
-      return maj({ assistant: { questions } }, questions.length
-        ? `❓ ${questions.length} question(s) réglée(s) : c\u2019est celles-là que l\u2019assistant posera.`
-        : '🪄 Plus de questions fixes : l\u2019IA improvise (et « c\u2019est tout ? » reste demandé à la fin).');
-    }
-    if (id === 'cfg:asst:questions-off') return maj({ assistant: { questions: [] } }, '🪄 Questions fixes effacées — l\u2019IA prend le relais.');
-
-    // ── 🎫 Système de tickets : l'assistant en sous-menus (façon One Assist) ──
-    if (id === 'cfg:tikw:mode' && interaction.isStringSelectMenu()) {
-      const mode = interaction.values[0] === 'menu' ? 'menu' : 'bouton';
-      stockage.majReglages(G, { tickets: { mode, vue: 'actions' } });
-      await montrer(mode === 'menu'
-        ? '📋 **Ticket Menu** — un menu déroulant sous la carte. Étape 2 à toi.'
-        : '🎛️ **Ticket Bouton** — un bouton par type sous la carte. Étape 2 à toi.');
-      return true;
-    }
-    if (id === 'cfg:tikw:style') {
-      stockage.majReglages(G, { tickets: { vue: 'style' } });
-      await montrer(null);
-      return true;
-    }
-    if (id === 'cfg:tikw:back') { await montrer(null); return true; }
-    if (id === 'cfg:tikw:action' && interaction.isStringSelectMenu()) {
-      const action = interaction.values[0];
-      const t = stockage.reglages(G).tickets || {};
-      const types = listeTypes(t);
-      if (action === 'nouveau') {
-        if (types.length >= 6) { await montrer('⚠️ Déjà 6 boutons — supprime-en un pour en créer un autre.'); return true; }
-        const modal = new ModalBuilder().setCustomId('cfg:tikw:btn-modal').setTitle('➕ Nouveau bouton du panneau');
-        const nom = new TextInputBuilder().setCustomId('nom').setLabel('Nom du bouton *').setPlaceholder('ex. Support, Partenariat, Réclamation…').setStyle(TextInputStyle.Short).setMaxLength(40).setRequired(true);
-        const emoji = new TextInputBuilder().setCustomId('emoji').setLabel('Emoji (facultatif)').setPlaceholder('😀').setStyle(TextInputStyle.Short).setMaxLength(8).setRequired(false);
-        const desc = new TextInputBuilder().setCustomId('desc').setLabel('Description (petite ligne sous le nom)').setPlaceholder('ex. : un problème avec le stream').setStyle(TextInputStyle.Short).setMaxLength(95).setRequired(false);
-        modal.addComponents(new ActionRowBuilder().addComponents(nom), new ActionRowBuilder().addComponents(emoji), new ActionRowBuilder().addComponents(desc));
-        await interaction.showModal(modal).catch(() => null);
-        return true;
-      }
-      if (action === 'supprimer') {
-        if (!types.length) { await montrer('🗑️ Aucun bouton à supprimer pour le moment — crée-en un d\u2019abord.'); return true; }
-        const paquet = carteSupprBouton(G);
-        await interaction.update(paquet).catch(() => interaction.reply({ ...paquet, flags: MessageFlags.Ephemeral }).catch(() => null));
-        return true;
-      }
-      if (action === 'textes') {
-        const modal = new ModalBuilder().setCustomId('cfg:tikw:pan-modal').setTitle('✏️ Les textes du panneau');
-        const titre = new TextInputBuilder().setCustomId('titre').setLabel('Titre du panneau').setPlaceholder('📩 Besoin d\u2019aide ? Ouvre un ticket').setStyle(TextInputStyle.Short).setMaxLength(80).setRequired(false).setValue(String(t.titre || '').slice(0, 80));
-        const texte = new TextInputBuilder().setCustomId('texte').setLabel('Texte dans le panneau').setPlaceholder('Explique ici comment se passent les tickets…').setStyle(TextInputStyle.Paragraph).setMaxLength(1000).setRequired(false).setValue(String(t.texte || '').slice(0, 1000));
-        modal.addComponents(new ActionRowBuilder().addComponents(titre), new ActionRowBuilder().addComponents(texte));
-        await interaction.showModal(modal).catch(() => null);
-        return true;
-      }
-      if (action === 'reset') {
-        stockage.majReglages(G, { tickets: { titre: null, texte: null } });
-        await montrer('🧹 Textes par défaut restaurés — « ✅ Terminer » pour recopier le panneau.');
-        return true;
-      }
-      if (action === 'finir') {
-        await montrer(await publierPanneauAssistant(interaction, G));
-        return true;
-      }
-      await montrer(null);
-      return true;
-    }
-    if (id === 'cfg:tikw:btn-modal' && interaction.isModalSubmit()) {
-      const nom = String(interaction.fields?.getTextInputValue('nom') || '').trim().slice(0, 40);
-      const emoji = String(interaction.fields?.getTextInputValue('emoji') || '').trim().slice(0, 8);
-      const desc = String(interaction.fields?.getTextInputValue('desc') || '').trim().slice(0, 95);
-      if (!nom) { await montrer('🤔 Un nom quand même — le bouton doit dire quelque chose.'); return true; }
-      const t = stockage.reglages(G).tickets || {};
-      const types = listeTypes(t);
-      if (types.length >= 6) { await montrer('⚠️ Déjà 6 boutons — supprime-en un d\u2019abord.'); return true; }
-      const propre = { nom, emoji: /^[^\p{L}\p{N}]/u.test(emoji) ? emoji : null, desc: desc || null };
-      stockage.majReglages(G, { tickets: { types: [...types, propre] } });
-      await montrer(`➕ Bouton « ${propre.emoji ? propre.emoji + ' ' : ''}${propre.nom} » créé — « ✅ Terminer » pour l'envoyer sous la carte.`);
-      return true;
-    }
-    if (id === 'cfg:tikw:btn-del' && interaction.isStringSelectMenu()) {
-      const idx = Number(interaction.values[0]);
-      const t = stockage.reglages(G).tickets || {};
-      const retire = listeTypes(t)[idx];
-      if (!retire) { await montrer('🤔 Ce bouton n\u2019existe déjà plus.'); return true; }
-      stockage.majReglages(G, { tickets: { types: (t.types || []).filter((_, i) => i !== idx) } });
-      await montrer(`🗑️ Bouton « ${retire.nom} » supprimé — renvoie le panneau pour le retirer aussi sous la carte.`);
-      return true;
-    }
-    if (id === 'cfg:tikw:pan-modal' && interaction.isModalSubmit()) {
-      const titre = String(interaction.fields?.getTextInputValue('titre') || '').trim() || null;
-      const texte = String(interaction.fields?.getTextInputValue('texte') || '').trim() || null;
-      stockage.majReglages(G, { tickets: { titre, texte } });
-      if (!titre && !texte) { await montrer('✏️ Panneau vidé — les textes par défaut reprendront à l\u2019envoi.'); return true; }
-      await montrer(`✏️ Textes enregistrés. ${await publierPanneauAssistant(interaction, G)}`);
-      return true;
     }
 
     // ── IA ──

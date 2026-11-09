@@ -50,7 +50,7 @@ test('/config : affiche le sélecteur de sections en première rangée', async (
   const json = paquet.components.map((c) => c.toJSON());
   assert.strictEqual(json[0].components[0].custom_id, 'cfg:section', 'le sélecteur de sections doit être en premier');
   assert.deepStrictEqual(json[0].components[0].options.map((o) => o.value),
-    ['accueil', 'salons', 'automod', 'sanctions', 'ia', 'assistant', 'tickets'], 'les sept rubriques, tickets en dernier');
+    ['accueil', 'salons', 'automod', 'sanctions', 'ia'], 'les cinq rubriques');
   assert.strictEqual(json.length, 1, 'à la première ouverture : le sélecteur seul');
 });
 
@@ -310,6 +310,11 @@ test('warn : sans sanction automatique activée, aucun mute', async () => {
     await warn.executer(inter);
   }
   assert.strictEqual(cible.actions.filter((a) => a[0] === 'timeout').length, 0);
+});
+
+test('une rubrique périmée en mémoire retombe sur l’accueil sans crash', () => {
+  const carte = config.carteRubrique(G, 'fantome', 'C1', null);
+  assert.ok(carte.embeds[0].toJSON().title.includes('Accueil'), 'carte par défaut attendue');
 });
 
 module.exports = { nom: 'panneau', cas };

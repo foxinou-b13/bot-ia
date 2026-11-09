@@ -33,17 +33,6 @@ module.exports = {
       console.warn('⚠️ Commandes non enregistrées :', erreur.message);
     }
 
-    // Assistant de tickets : surveillance des silences dans les entretiens en cours.
-    try {
-      const asst = require('../utils/assistant-ticket');
-      asst.fournirClient(client);
-      asst.demarrerVeille();
-      const n = asst.sessions.size;
-      if (n) console.log(`   🤝 Assistant tickets : ${n} entretien(s) en cours repris.`);
-    } catch (erreur) {
-      console.warn('⚠️ Assistant tickets non démarré :', erreur.message);
-    }
-
     console.log(`   Version ${config.version} prête.`);
   },
 };

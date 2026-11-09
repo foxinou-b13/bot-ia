@@ -27,7 +27,6 @@ module.exports = {
       '`/ban` `/kick` `/mute` — sanctions',
       '`/warn` `/avertissements` `/avertissement-retirer` — suivi des avertissements',
       '`/clear` `/slowmode` `/lock` `/unlock` `/role` — gestion du salon',
-      '`/tickets` — le système de tickets d\'Otaku : panneau « Ouvrir un ticket », salons privés, transcription au staff (zéro image, `/tickets setup` en un coup)',
       '**📓 Journal du staff** — sanctions, auto-mod, messages supprimés/modifiés, départs : salon + contenu réglés dans `/config` → « Salons & repères »',
       '',
       '**⚙️ Réglages**',
