@@ -176,7 +176,7 @@ Tape `/config` : un menu « Que veux-tu configurer ? » avec 7 sections ; chaque
 - **⚖️ Sanctions** : punition automatique après X avertissements.
 - **🤖 IA** : couper/réactiver par salon, personnalité (formulaire), oublier la mémoire.
 - **🤝 Assistant dans les tickets** : activer/couper, catégorie des tickets, panneau d'origine, rôle staff, salon d'alerte, questions fixes (une par ligne, 6 max).
-- **🎫 Tickets (système maison)** : interrupteur, **format du panneau (boutons ou menu déroulant)**, catégorie, salon du panneau, transcriptions, rôle staff, types de tickets (emoji + nom, 6 max), textes du panneau.
+- **🎫 Système de tickets** : un assistant — carte 1 : 🎛️ Ticket Bouton ou 📋 Ticket Menu ; carte 2 : créer/supprimer un bouton, textes du panneau, publier. Une carte par menu, jamais deux collés.
 
 ## L'assistant tickets dans /config (v1.6.0 → 1.6.1)
 `/config` → **🎫 Système de tickets** : un assistant, **une carte par menu** — jamais deux menus collés, jamais un pavé de texte.
