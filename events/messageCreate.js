@@ -161,6 +161,14 @@ module.exports = {
       if (analyse) return;
     }
 
+    // ─── assistant d'accueil dans les tickets (prépare l'arrivée du staff) ───
+    try {
+      const asst = require('../utils/assistant-ticket');
+      if (await asst.traiterMessage(message)) return;
+    } catch (erreur) {
+      console.warn('⚠️ Assistant ticket :', erreur.message);
+    }
+
     // ─── 2. IA sur mention ───
     if (!client.user || !message.mentions.has(client.user.id)) return;
     if (message.content.replace(/<@!?\d+>/g, '').trim().length === 0) {

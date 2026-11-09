@@ -148,6 +148,76 @@ const RUBRIQUES = {
       },
     },
   },
+  assistant: {
+    label: '🤝 Assistant dans les tickets',
+    aide: 'Otaku accueille dans les tickets, questionne, résume pour le staff',
+    intro: 'Quand un membre ouvre un ticket (créé par n\'importe quel bot de tickets), Otaku l\'accueil à la place du staff arrivant : il pose les questions utiles, demande si c\'est tout, puis publie un **récapitulatif propre** pour le staff. Un clic « 🙌 Je prends en charge » et il se retire pour de bon.',
+    items: {
+      couper: {
+        label: '🎛️ Activer ou couper',
+        desc: 'L\'interrupteur général. Coupé, Otaku ne dit plus rien dans les tickets, même si tout le reste est réglé.',
+      },
+      categorie: {
+        label: '📁 Catégorie des tickets',
+        desc: 'La catégorie SOUS LAQUELLE les salons de ticket sont créés. C\'est comme ça qu\'Otaku les reconnaît — choisis-la dans le menu (les salons de sa catégorie déclenchent l\'assistant).',
+      },
+      panneau: {
+        label: '🧾 Salon du panneau de tickets',
+        desc: 'Facultatif : le salon où se trouve le panneau « ouvrir un ticket ». Otaku le cite en pied de récapitulatif pour que le staff retrouve l\'origine.',
+      },
+      staff: {
+        label: '🧑‍💼 Rôle du staff',
+        desc: 'Un seul rôle. Dès qu\'un membre portant ce rôle écrit dans le ticket, Otaku s\'arrête net et livre son récapitulatif : « le staff est là, je file ». (Les détenteurs de « Gérer les messages » comptent aussi comme staff.)',
+      },
+      alerte: {
+        label: '📣 Salon d\'alerte',
+        desc: 'Si le membre demande un humain (ou ne répond plus du tout), Otaku prévient ici. Idéalement un salon privé du staff. Sans réglage, il se contente du récapitulatif dans le ticket.',
+      },
+      questions: {
+        label: '❓ Les questions à poser',
+        desc: 'Une par ligne (6 maximum) : exactement ce que ton staff demande d\'habitude. Vide = Otaku improvise les questions avec l\'IA (et redemande « c\'est tout ? » à la fin).',
+      },
+    },
+  },
+  tickets: {
+    label: '🎫 Tickets (système maison)',
+    aide: 'Panneau bouton ou menu, catégorie, logs, types de tickets',
+    intro: 'Le système de tickets d\'Otaku, réglé ici étape par étape : d\'abord **le format du panneau** (boutons ou menu déroulant comme les grands bots de tickets), puis où vivent les tickets, qui s\'en occupe, et où partent les transcriptions. Toujours **sans image générée** : une carte propre et le choix du type de demande.',
+    items: {
+      couper: {
+        label: '🎛️ Activer ou couper',
+        desc: 'L\'interrupteur général du système de tickets. Coupé : le panneau affiche une réponse polie et plus rien ne se crée.',
+      },
+      format: {
+        label: '🕹️ Format du panneau',
+        desc: 'Comment les membres choisissent leur type de demande : **Boutons** — un bouton par type, sous la carte ; **Menu** — un menu déroulant « Choisis le type ». Sans types réglés, les deux formats affichent juste un gros bouton « Ouvrir un ticket ».',
+      },
+      categorie: {
+        label: '📁 Catégorie des tickets',
+        desc: 'Sous cette catégorie que les salons privés « ticket-… » sont créés. C\'est aussi elle qui déclenche l\'assistant d\'accueil (rubrique 🤝) quand un membre y écrit.',
+      },
+      panneau: {
+        label: '🧾 Salon du panneau',
+        desc: 'Le salon où vit la carte « Ouvrir un ticket ». C\'est ici que le bouton / le menu doit être cliquable par tout le monde.',
+      },
+      logs: {
+        label: '📜 Salon des transcriptions',
+        desc: 'À la fermeture d\'un ticket, la conversation résumée part ici, avec le bouton « 🔁 Rouvrir ». Idéalement un salon privé du staff.',
+      },
+      staff: {
+        label: '🧑‍💼 Rôle du staff',
+        desc: 'Qui a le droit de prendre en charge, ajouter des gens, rouvrir des tickets. Les détenteurs de « Gérer les messages » comptent toujours aussi.',
+      },
+      types: {
+        label: '🏷️ Les types de tickets',
+        desc: 'Un par ligne (6 max), optionnellement précédé d\'un emoji : « 😀 Support », « 🤝 Partenariat »… Ce sont les boutons du mode Boutons et les choix du mode Menu. Vide = un seul bouton « Ouvrir un ticket ».',
+      },
+      textes: {
+        label: '✏️ Titre et texte du panneau',
+        desc: 'Ce que dit la carte au-dessus des boutons. Par défaut : « Besoin d\'aide ? Ouvre un ticket » + une phrase d\'accueil.',
+      },
+    },
+  },
 };
 
 const SECTIONS = Object.entries(RUBRIQUES).map(([valeur, r]) => ({ valeur, label: r.label, aide: r.aide }));
@@ -249,6 +319,26 @@ function carteRubrique(G, sec, channelId, note) {
       name: '⚖️ Formule actuelle',
       value: a.sanctionAuto ? `**${a.seuilAvert || 3}** avertissement(s) → sourdine **${a.dureeSanction || 60} min**` : '_désactivée — les avertissements s\'empilent sans effet_',
     });
+  } else if (sec === 'assistant') {
+    const as = r.assistant || {};
+    const nb = (as.questions || []).filter(Boolean).length;
+    embed.addFields(
+      { name: '🎛️ Interrupteur', value: as.actif ? '✅ actif' : '⬜ coupé', inline: true },
+      { name: '📁 Catégorie', value: as.categorie ? `<#${as.categorie}>` : VIDE, inline: true },
+      { name: '❓ Questions', value: nb ? `${nb} sur 6 réglées` : 'improvisées par l\u2019IA', inline: true },
+      { name: '📣 Alerte', value: as.alerte ? `<#${as.alerte}>` : 'récap dans le ticket seulement', inline: true },
+    );
+  } else if (sec === 'tickets') {
+    const t = r.tickets || {};
+    const nt = (t.types || []).filter(Boolean).length;
+    embed.addFields(
+      { name: '🎛️ Interrupteur', value: t.actif ? '✅ actif' : '⬜ coupé', inline: true },
+      { name: '🕹️ Format du panneau', value: t.mode === 'menu' ? '📋 menu déroulant' : '🎛️ boutons', inline: true },
+      { name: '🏷️ Types', value: nt ? `${nt} sur 6` : 'aucun — bouton unique', inline: true },
+      { name: '📁 Catégorie', value: t.categorie ? `<#${t.categorie}>` : VIDE, inline: true },
+      { name: '🧾 Panneau', value: t.panneau ? `<#${t.panneau}>` : VIDE, inline: true },
+      { name: '📜 Transcriptions', value: t.logs ? `<#${t.logs}>` : VIDE, inline: true },
+    );
   } else if (sec === 'ia') {
     const iaR = r.ia || {};
     const coupeeIci = Boolean(channelId && (iaR.salonBloques || []).includes(channelId));
@@ -372,6 +462,92 @@ function carteReglage(G, sec, cle, channelId, note = null, opts = {}) {
     rows.push(rang(bouton('cfg:perso', 'Écrire la personnalité', '🎭', ButtonStyle.Primary)));
   } else if (sec === 'ia' && cle === 'memo') {
     rows.push(rang(bouton('cfg:memo', 'Oublier la conversation de CE salon', '🧠', ButtonStyle.Danger)));
+  } else if (sec === 'assistant' && cle === 'couper') {
+    const as = r.assistant || {};
+    valeurActuelle(embed, as.actif ? '✅ actif — Otaku accueille dans les tickets' : '⬜ coupé');
+    rows.push(rang(bouton('cfg:asst:toggle', as.actif ? 'Couper l\'assistant' : 'Activer l\'assistant', as.actif ? '🔕' : '🟢',
+      as.actif ? ButtonStyle.Danger : ButtonStyle.Success)));
+  } else if (sec === 'assistant' && cle === 'categorie') {
+    const as = r.assistant || {};
+    valeurActuelle(embed, as.categorie ? `<#${as.categorie}>` : '🔇 aucune — l\'assistant ne saura pas reconnaître les tickets');
+    rows.push(rang(new ChannelSelectMenuBuilder().setCustomId('cfg:asst:categorie')
+      .setPlaceholder('📁 La catégorie où les salons de ticket sont créés')
+      .addChannelTypes(ChannelType.GuildCategory)));
+    rows.push(rang(bouton('cfg:asst:categorie-off', 'Retirer la catégorie', '🧹')));
+  } else if (sec === 'assistant' && cle === 'panneau') {
+    const as = r.assistant || {};
+    valeurActuelle(embed, as.panneau ? `<#${as.panneau}>` : null);
+    rows.push(rang(new ChannelSelectMenuBuilder().setCustomId('cfg:asst:panneau')
+      .setPlaceholder('🧾 Le salon du panneau de tickets (facultatif)')
+      .addChannelTypes(ChannelType.GuildText, ChannelType.GuildAnnouncement)));
+  } else if (sec === 'assistant' && cle === 'staff') {
+    const as = r.assistant || {};
+    valeurActuelle(embed, as.staffRole ? `<@&${as.staffRole}>` : '👥 juste « Gérer les messages » compte comme staff');
+    rows.push(rang(new RoleSelectMenuBuilder().setCustomId('cfg:asst:staff')
+      .setPlaceholder('🧑‍💼 Le rôle qui dit à Otaku de se retirer')));
+    rows.push(rang(bouton('cfg:asst:staff-off', 'Retirer le rôle', '🧹')));
+  } else if (sec === 'assistant' && cle === 'alerte') {
+    const as = r.assistant || {};
+    valeurActuelle(embed, as.alerte ? `<#${as.alerte}>` : null);
+    rows.push(rang(new ChannelSelectMenuBuilder().setCustomId('cfg:asst:alerte')
+      .setPlaceholder('📣 Où prévenir quand le membre veut un humain')
+      .addChannelTypes(ChannelType.GuildText)));
+  } else if (sec === 'assistant' && cle === 'questions') {
+    const as = r.assistant || {};
+    const qs = (as.questions || []).filter(Boolean);
+    valeurActuelle(embed, qs.length ? qs.map((q, i) => `**${i + 1}.** ${q}`.slice(0, 150)).join('\n').slice(0, 900) : null);
+    rows.push(rang(bouton('cfg:asst:questions', 'Écrire les questions', '✏️', ButtonStyle.Primary),
+      bouton('cfg:asst:questions-off', 'Laisser l\'IA improviser', '🪄')));
+  } else if (sec === 'tickets' && cle === 'couper') {
+    const t = r.tickets || {};
+    valeurActuelle(embed, t.actif ? '✅ actif — le panneau et les salons privés tournent' : '⬜ coupé');
+    rows.push(rang(bouton('cfg:tik:toggle', t.actif ? 'Couper les tickets' : 'Activer les tickets', t.actif ? '🔕' : '🟢',
+      t.actif ? ButtonStyle.Danger : ButtonStyle.Success)));
+  } else if (sec === 'tickets' && cle === 'format') {
+    const t = r.tickets || {};
+    valeurActuelle(embed, t.mode === 'menu' ? '📋 menu déroulant (« Choisis le type… »)' : '🎛️ boutons (un par type)');
+    rows.push(rang(new StringSelectMenuBuilder().setCustomId('cfg:tik:mode').setPlaceholder('🕹️ Comment présenter le choix ?')
+      .addOptions(
+        { label: 'Boutons — un par type', value: 'bouton', description: 'Des boutons verts sous la carte, comme les grands bots de tickets' },
+        { label: 'Menu déroulant', value: 'menu', description: 'Un seul menu « Choisis le type de ta demande »' },
+      )));
+  } else if (sec === 'tickets' && cle === 'categorie') {
+    const t = r.tickets || {};
+    valeurActuelle(embed, t.categorie ? `<#${t.categorie}>` : '🔇 aucune — impossible de créer les tickets');
+    rows.push(rang(new ChannelSelectMenuBuilder().setCustomId('cfg:tik:categorie')
+      .setPlaceholder('📁 La catégorie où naîtront les salons de ticket')
+      .addChannelTypes(ChannelType.GuildCategory)));
+  } else if (sec === 'tickets' && cle === 'panneau') {
+    const t = r.tickets || {};
+    valeurActuelle(embed, t.panneau ? `<#${t.panneau}>` : null);
+    rows.push(rang(new ChannelSelectMenuBuilder().setCustomId('cfg:tik:panneau')
+      .setPlaceholder('🧾 Le salon où vit la carte « Ouvrir un ticket »')
+      .addChannelTypes(ChannelType.GuildText, ChannelType.GuildAnnouncement)));
+  } else if (sec === 'tickets' && cle === 'logs') {
+    const t = r.tickets || {};
+    valeurActuelle(embed, t.logs ? `<#${t.logs}>` : null);
+    rows.push(rang(new ChannelSelectMenuBuilder().setCustomId('cfg:tik:logs')
+      .setPlaceholder('📜 Où envoyer les transcriptions à la fermeture')
+      .addChannelTypes(ChannelType.GuildText)));
+  } else if (sec === 'tickets' && cle === 'staff') {
+    const t = r.tickets || {};
+    valeurActuelle(embed, t.staffRole ? `<@&${t.staffRole}>` : '👥 juste « Gérer les messages » compte comme staff');
+    rows.push(rang(new RoleSelectMenuBuilder().setCustomId('cfg:tik:staff')
+      .setPlaceholder('🧑‍💼 Le rôle qui gère les tickets')));
+    rows.push(rang(bouton('cfg:tik:staff-off', 'Retirer le rôle', '🧹')));
+  } else if (sec === 'tickets' && cle === 'types') {
+    const t = r.tickets || {};
+    const ts = (t.types || []).filter(Boolean);
+    valeurActuelle(embed, ts.length ? ts.map((x, i) => `**${i + 1}.** ${x}`.slice(0, 150)).join('\n').slice(0, 900) : null);
+    rows.push(rang(bouton('cfg:tik:types', 'Écrire les types de tickets', '✏️', ButtonStyle.Primary),
+      bouton('cfg:tik:types-off', 'Un seul bouton', '🧹')));
+  } else if (sec === 'tickets' && cle === 'textes') {
+    const t = r.tickets || {};
+    valeurActuelle(embed, t.titre || t.texte
+      ? `${t.titre ? `**${t.titre}**\n` : ''}${t.texte ? `> ${String(t.texte).slice(0, 140)}` : ''}`
+      : 'par défaut (« 📩 Besoin d\'aide ? Ouvre un ticket »)');
+    rows.push(rang(bouton('cfg:tik:textes', 'Écrire titre et texte', '✏️', ButtonStyle.Primary),
+      bouton('cfg:tik:textes-off', 'Revenir aux textes par défaut', '🧹')));
   }
 
   rows.push(boutonRetour());
@@ -637,6 +813,136 @@ module.exports = {
       return maj({ automod: { sanctionAuto: true, seuilAvert: seuil, dureeSanction: duree } },
         `⚖️ Activé : **${seuil} avertissement(s) → sourdine ${duree} min**.`);
     }
+
+    // ── assistant de tickets ──
+    if (id === 'cfg:asst:toggle') {
+      const as = stockage.reglages(G).assistant || {};
+      return maj({ assistant: { actif: !as.actif } },
+        as.actif ? '🔕 Assistant coupé — Otaku n\u2019interviendra plus dans les tickets.'
+                 : '🟢 Assistant activé — il accueille désormais dans les salons de la catégorie réglée.');
+    }
+    if (id === 'cfg:asst:categorie' && interaction.isChannelSelectMenu()) {
+      const salon = interaction.channels.first();
+      return maj({ assistant: { categorie: salon ? salon.id : null } },
+        salon ? `📁 Tickets reconnus : tout salon créé sous <#${salon.id}> (id).` : '✅ Catégorie mise à jour.');
+    }
+    if (id === 'cfg:asst:categorie-off') return maj({ assistant: { categorie: null } }, '🧹 Catégorie retirée — l\u2019assistant ne reconnaîtra plus les tickets.');
+    if (id === 'cfg:asst:panneau' && interaction.isChannelSelectMenu()) {
+      const salon = interaction.channels.first();
+      return maj({ assistant: { panneau: salon ? salon.id : null } }, salon ? `🧾 Panneau noté : <#${salon.id}>.` : '✅ Retiré.');
+    }
+    if (id === 'cfg:asst:staff') {
+      const role = interaction.roles?.first?.() || null;
+      return maj({ assistant: { staffRole: role ? role.id : null } },
+        role ? `🧑‍💼 Dès que « ${role.name} » écrit dans un ticket, Otaku livrera son récapitulatif et se retirera.` : '✅ Rôle mis à jour.');
+    }
+    if (id === 'cfg:asst:staff-off') return maj({ assistant: { staffRole: null } }, '🧹 Rôle staff retiré — seuls les « Gérer les messages » compteront.');
+    if (id === 'cfg:asst:alerte' && interaction.isChannelSelectMenu()) {
+      const salon = interaction.channels.first();
+      return maj({ assistant: { alerte: salon ? salon.id : null } },
+        salon ? `📣 Alertes envoyées dans <#${salon.id}>.` : '✅ Alerte retirée — le récap restera dans le ticket.');
+    }
+    if (id === 'cfg:asst:questions') {
+      const actuelle = (stockage.reglages(G).assistant || {}).questions || [];
+      const modal = new ModalBuilder().setCustomId('cfg:asst:questions-modal').setTitle('❓ Questions de l\u2019assistant');
+      const champ = new TextInputBuilder()
+        .setCustomId('questions')
+        .setLabel('Une question par ligne (6 max)')
+        .setPlaceholder('Quel est le problème exactement ?\nDepuis quand ça dure ?\nQu\u2019attends-tu du staff ?')
+        .setStyle(TextInputStyle.Paragraph).setMaxLength(1000).setRequired(false)
+        .setValue(actuelle.join('\n').slice(0, 1000));
+      modal.addComponents(new ActionRowBuilder().addComponents(champ));
+      await interaction.showModal(modal).catch(() => null);
+      return true;
+    }
+    if (id === 'cfg:asst:questions-modal') {
+      const brut = String(interaction.fields?.getTextInputValue('questions') || '');
+      const questions = brut.split('\n').map((q) => q.trim()).filter(Boolean).slice(0, 6);
+      return maj({ assistant: { questions } }, questions.length
+        ? `❓ ${questions.length} question(s) réglée(s) : c\u2019est celles-là que l\u2019assistant posera.`
+        : '🪄 Plus de questions fixes : l\u2019IA improvise (et « c\u2019est tout ? » reste demandé à la fin).');
+    }
+    if (id === 'cfg:asst:questions-off') return maj({ assistant: { questions: [] } }, '🪄 Questions fixes effacées — l\u2019IA prend le relais.');
+
+    // ── tickets maison ──
+    if (id === 'cfg:tik:toggle') {
+      const t = stockage.reglages(G).tickets || {};
+      return maj({ tickets: { actif: !t.actif } },
+        t.actif ? '🔕 Tickets coupés — le panneau répondra poliment que ce n\u2019est pas ouvert.'
+                : '🟢 Tickets activés — le panneau (boutons ou menu) fait son travail.');
+    }
+    if (id === 'cfg:tik:mode' && interaction.isStringSelectMenu()) {
+      const mode = interaction.values[0] === 'menu' ? 'menu' : 'bouton';
+      const t = stockage.reglages(G).tickets || {};
+      const nt = (t.types || []).filter(Boolean).length;
+      return maj({ tickets: { mode } }, mode === 'menu'
+        ? `📋 Mode menu : ${nt ? `${nt} choix dans « Choisis le type de ta demande ».` : 'ajoute des types (🏷️) — sans eux, un seul bouton s\u2019affichera.'}`
+        : `🎛️ Mode boutons : ${nt ? `${nt} bouton(s) sous la carte.` : 'un gros bouton « Ouvrir un ticket » tant qu\u2019il n\u2019y a pas de types.'}`);
+    }
+    if (id === 'cfg:tik:categorie' && interaction.isChannelSelectMenu()) {
+      const salon = interaction.channels.first();
+      return maj({ tickets: { categorie: salon ? salon.id : null } },
+        salon ? `📁 Les tickets naîtront sous « ${salon.name} » (l\u2019assistant 🤝 suivra automatiquement).` : '✅ Catégorie mise à jour.');
+    }
+    if (id === 'cfg:tik:panneau' && interaction.isChannelSelectMenu()) {
+      const salon = interaction.channels.first();
+      if (!salon) return maj({ tickets: { panneau: null } }, '✅ Retiré.');
+      maj({ tickets: { panneau: salon.id } });
+      try {
+        const t = require('../utils/tickets');
+        await salon.send(t.panneauMessage(t.reglages(G), interaction.guild?.name)).catch(() => null);
+        return montrer('🧾 Panneau envoyé dans ce salon, réglages enregistrés.');
+      } catch { return montrer('🧾 Réglage enregistré — renvoie le panneau avec /tickets panneau si besoin.'); }
+    }
+    if (id === 'cfg:tik:logs' && interaction.isChannelSelectMenu()) {
+      const salon = interaction.channels.first();
+      return maj({ tickets: { logs: salon ? salon.id : null } },
+        salon ? `📜 Transcriptions envoyées dans <#${salon.id}>.` : '✅ Transcriptions retirées — les tickets fermeront sans journal.');
+    }
+    if (id === 'cfg:tik:staff') {
+      const role = interaction.roles?.first?.() || null;
+      return maj({ tickets: { staffRole: role ? role.id : null } },
+        role ? `🧑‍💼 Rôle staff des tickets : « ${role.name} ».` : '✅ Rôle mis à jour.');
+    }
+    if (id === 'cfg:tik:staff-off') return maj({ tickets: { staffRole: null } }, '🧹 Rôle retiré — seuls les « Gérer les messages » compteront.');
+    if (id === 'cfg:tik:types') {
+      const actuelle = (stockage.reglages(G).tickets || {}).types || [];
+      const modal = new ModalBuilder().setCustomId('cfg:tik:types-modal').setTitle('🏷️ Types de tickets');
+      const champ = new TextInputBuilder()
+        .setCustomId('types')
+        .setLabel('Un type par ligne (6 max) — emoji optionnel devant')
+        .setPlaceholder('😀 Support\n🤝 Partenariat\n🧾 Réclamation')
+        .setStyle(TextInputStyle.Paragraph).setMaxLength(600).setRequired(false)
+        .setValue(actuelle.join('\n').slice(0, 600));
+      modal.addComponents(new ActionRowBuilder().addComponents(champ));
+      await interaction.showModal(modal).catch(() => null);
+      return true;
+    }
+    if (id === 'cfg:tik:types-modal') {
+      const brut = String(interaction.fields?.getTextInputValue('types') || '');
+      const types = brut.split('\n').map((x) => x.trim()).filter(Boolean).slice(0, 6);
+      return maj({ tickets: { types } }, types.length
+        ? `🏷️ ${types.length} type(s) : c\u2019est eux que montreront les boutons ou le menu. Renvoie le panneau (🧾) pour les afficher.`
+        : '🧹 Plus de types : le panneau affichera le bouton unique « Ouvrir un ticket ».');
+    }
+    if (id === 'cfg:tik:types-off') return maj({ tickets: { types: [] } }, '🧹 Types effacés — retour au bouton unique.');
+    if (id === 'cfg:tik:textes') {
+      const t = stockage.reglages(G).tickets || {};
+      const modal = new ModalBuilder().setCustomId('cfg:tik:textes-modal').setTitle('✏️ Textes du panneau');
+      const titre = new TextInputBuilder().setCustomId('titre').setLabel('Titre (laisse vide = par défaut)')
+        .setStyle(TextInputStyle.Short).setMaxLength(80).setRequired(false).setValue(String(t.titre || '').slice(0, 80));
+      const texte = new TextInputBuilder().setCustomId('texte').setLabel('Texte sous le titre (vide = par défaut)')
+        .setStyle(TextInputStyle.Paragraph).setMaxLength(1000).setRequired(false).setValue(String(t.texte || '').slice(0, 1000));
+      modal.addComponents(new ActionRowBuilder().addComponents(titre), new ActionRowBuilder().addComponents(texte));
+      await interaction.showModal(modal).catch(() => null);
+      return true;
+    }
+    if (id === 'cfg:tik:textes-modal') {
+      const titre = String(interaction.fields?.getTextInputValue('titre') || '').trim() || null;
+      const texte = String(interaction.fields?.getTextInputValue('texte') || '').trim() || null;
+      return maj({ tickets: { titre, texte } }, '✏️ Textes du panneau enregistrés — renvoie le panneau (🧾) pour les voir.');
+    }
+    if (id === 'cfg:tik:textes-off') return maj({ tickets: { titre: null, texte: null } }, '🧹 Textes par défaut restaurés.');
 
     // ── IA ──
     if (id === 'cfg:ia-ici') {

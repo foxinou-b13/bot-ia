@@ -49,7 +49,8 @@ test('/config : affiche le sélecteur de sections en première rangée', async (
   assert.ok(paquet.embeds?.length, 'aucun embed');
   const json = paquet.components.map((c) => c.toJSON());
   assert.strictEqual(json[0].components[0].custom_id, 'cfg:section', 'le sélecteur de sections doit être en premier');
-  assert.strictEqual(json[0].components[0].options.length, 5, '5 sections attendues');
+  assert.deepStrictEqual(json[0].components[0].options.map((o) => o.value),
+    ['accueil', 'salons', 'automod', 'sanctions', 'ia', 'assistant', 'tickets'], 'les sept rubriques, tickets en dernier');
   assert.strictEqual(json.length, 1, 'à la première ouverture : le sélecteur seul');
 });
 

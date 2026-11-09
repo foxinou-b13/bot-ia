@@ -169,12 +169,45 @@ les messages, la structure des commandes et la sécurité (aucun secret dans le 
 
 
 ## Panneau /config — sections (réorganisation)
-Tape `/config` : un menu « Que veux-tu configurer ? » avec 5 sections ; chaque section n'affiche que ses sélecteurs.
+Tape `/config` : un menu « Que veux-tu configurer ? » avec 7 sections ; chaque section n'affiche que ses sélecteurs.
 - **👋 Accueil** : salon de bienvenue (sélecteur), message (formulaire), rôle automatique donné aux nouveaux (sélecteur de rôle).
 - **📋 Salons & repères** : logs du staff, salon des règles, salon pour contacter le staff — boutons « retirer » pour annuler.
 - **🛡️ Auto-modération** : modules activables/désactivables + salon exempté.
 - **⚖️ Sanctions** : punition automatique après X avertissements.
 - **🤖 IA** : couper/réactiver par salon, personnalité (formulaire), oublier la mémoire.
+- **🤝 Assistant dans les tickets** : activer/couper, catégorie des tickets, panneau d'origine, rôle staff, salon d'alerte, questions fixes (une par ligne, 6 max).
+- **🎫 Tickets (système maison)** : interrupteur, **format du panneau (boutons ou menu déroulant)**, catégorie, salon du panneau, transcriptions, rôle staff, types de tickets (emoji + nom, 6 max), textes du panneau.
+
+## Formats du panneau de tickets (v1.5.0)
+Dans `/config` → **🎫 Tickets** → « 🕹️ Format du panneau », deux présentations comme les grands bots de tickets :
+- **🎛️ Boutons** : un bouton vert par type de demande (« 😀 Support », « 🤝 Partenariat »…) sous la carte ;
+- **📋 Menu** : un menu déroulant unique « Choisis le type de ta demande ».
+Règle les types dans « 🏷️ Les types de tickets » (un par ligne, emoji optionnel) ; sans types, le panneau affiche le bouton
+unique « 📩 Ouvrir un ticket ». Le motif choisi est noté dans le ticket et dans le journal du staff. Et toujours : **aucune image
+générée sous le panneau**.
+
+## Système de tickets maison (v1.4.0)
+Otaku gère ses propres tickets, sans dépendre d'un autre bot — `/tickets` :
+- `/tickets setup` : crée (ou adopte) la catégorie « 📩 Tickets », le salon du panneau, le salon des transcriptions, et envoie
+  le panneau : **une carte propre + un bouton « 📩 Ouvrir un ticket »** — volontairement **aucune image générée** dessous.
+- Un membre clique → salon privé `ticket-pseudo` créé sous la catégorie (lui + le staff seulement, jamais les autres).
+- Dans le ticket : **✋ Prendre en charge** (le staff, coupe l'assistant d'office) et **🔒 Fermer** (demande la raison, envoie la
+  transcription au salon des logs, supprime le salon). Les logs gardent un bouton **🔁 Rouvrir ce ticket**.
+- Le staff peut aussi : `/tickets ouvrir <membre>`, `/tickets ajouter / retirer <membre>`, `/tickets reparer` (tickets fantômes
+  d'un membre parti), `/tickets couper` (interrupteur général). Un membre = un seul ticket ouvert à la fois.
+- Lié à l'assistant : la catégorie réglée ici sert de socle à `/config` → « 🤝 Assistant » (plus rien à régler deux fois).
+
+## Assistant d'accueil dans les tickets (v1.3.0)
+Otaku ne remplace pas ton bot de tickets : il **travaille dedans**. Règle dans `/config` → « Assistant » la **catégorie** où les
+tickets sont créés, et voilà :
+1. Un membre (non-staff) écrit pour la première fois dans un ticket → Otaku l'accueille et **pose les questions que ton staff
+   poserait** (les tiennes, écrites dans la config ; sinon il improvise avec l'IA, et demande toujours « c'est tout ? »).
+2. Il demande au membre si c'est fini, puis publie un **récapitulatif propre pour le staff** (ce que la personne veut, en clair).
+3. Le staff clique **🙌 Je prends en charge** → Otaku remercie, le confirme au membre et **se retire pour toujours** de ce ticket.
+   **🔁 Continuer** → il reprend l'interrogatoire poliment.
+Détails qui comptent : dès qu'un membre du rôle staff écrit, il livre son récap et file ; si le membre réclame un humain, alerte
+immédiate dans le salon d'alerte ; silence 15 min → petit rappel, 30 min → récap quand même ; jamais plus de 8 entretiens par
+serveur ; les réponses des autres membres ne sont pas harcelées. Un entretien survit à un redémarrage du bot.
 
 ## /guide (public)
 Carte des repères (règles, contact du staff, accueil). L'IA (`/ask`, mention) reçoit les mêmes liens et répond
