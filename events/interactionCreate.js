@@ -11,16 +11,6 @@ module.exports = {
   uneFois: false,
 
   async executer(client, interaction) {
-    // ─── appels entre membres transmis par Otaku (« app:… ») ───
-    if (interaction.isMessageComponent?.() && String(interaction.customId || '').startsWith('app:')) {
-      try {
-        await require('../utils/appels').traiterBouton(interaction);
-      } catch (erreur) {
-        console.warn('⚠️ Appel membre :', erreur.message);
-      }
-      return;
-    }
-
     // ─── menus déroulants, boutons, sélecteurs ───
     if (interaction.isMessageComponent?.() || interaction.isModalSubmit?.()) {
       // isMessageComponent couvre TOUS les composants : boutons, menus texte/salon/rôle/utilisateur/membles.

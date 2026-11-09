@@ -46,6 +46,8 @@ test('message normal : rien ne se passe', async () => {
   assert.strictEqual(message.channel.messagesEnvoyes.length, 0);
 });
 
+
+
 test('message d\'un bot : totalement ignoré', async () => {
   const message = messageFactice({ contenu: 'discord.gg/raid', estBot: true });
   message.author.bot = true;
@@ -237,48 +239,19 @@ test('juste « ota » → un salut, et jamais deux fois le même à la suite', a
   assert.ok(t1 && t2 && t1 !== t2, 'les saluts doivent varier');
 });
 
-test('vraie question posée sans ping → Otaku répond (réglage par défaut)', async () => {
+test('vraie question posée sans ping → silence : il faut le mentionner ou dire « ota »', async () => {
   const avant = appelIA;
-  const message = messageFactice({ contenu: 'comment on fait pour monter un stream ?', id: 'u-qsp-1', guildId: 'G-QSP' });
-  message.channel = require('./aide').salonMock({ id: 'C-QSP' });
+  const message = messageFactice({ contenu: 'comment on fait pour monter un stream ?', id: 'u-nospam-1', guildId: 'G-NOPING' });
   await messageCreate.executer(client, message);
-  assert.ok(appelIA > avant, 'question légitime ignorée à tort');
+  assert.strictEqual(appelIA, avant, 'Otaku ne doit pas se mêler des conversations sans être appelé');
 });
 
-test('deuxième question sans ping dans la foulée → silence (pause anti-mitraille)', async () => {
-  const avant = appelIA;
-  const message = messageFactice({ contenu: 'pourquoi ça bug des fois ?', id: 'u-qsp-2', guildId: 'G-QSP' });
-  message.channel = require('./aide').salonMock({ id: 'C-QSP' }); // même salon : la pause s’applique
+test('la réponse à une question ping en retour la personne qui l’a posée', async () => {
+  const message = messageFactice({ contenu: '<@bot-id> c\'est quoi un webhook ?', id: 'u-ping-1', guildId: 'G-PING' });
   await messageCreate.executer(client, message);
-  assert.strictEqual(appelIA, avant, 'deux réponses coup sur coup = bruit');
-});
-
-test('phrase ordinaire sans ping → silence total', async () => {
-  const avant = appelIA;
-  const message = messageFactice({ contenu: 'je suis allé manger, bref', id: 'u-qsp-3', guildId: 'G-QSP2' });
-  message.channel = require('./aide').salonMock({ id: 'C-QSP2' });
-  await messageCreate.executer(client, message);
-  assert.strictEqual(appelIA, avant);
-});
-
-test('réglage coupé dans /config → plus de réponses aux questions sans ping', async () => {
-  const avant = appelIA;
-  stockage.majReglages('G-QSP3', { ia: { repondreQuestions: false } });
-  const message = messageFactice({ contenu: 'comment on invite des gens ici ?', id: 'u-qsp-4', guildId: 'G-QSP3' });
-  message.channel = require('./aide').salonMock({ id: 'C-QSP3' });
-  await messageCreate.executer(client, message);
-  assert.strictEqual(appelIA, avant, 'le réglage coupé doit être respecté');
-  stockage.majReglages('G-QSP3', { ia: { repondreQuestions: true } });
-});
-
-test('« ota, appelle Léa » passe par messageCreate : raison demandée, IA épargnée', async () => {
-  const avant = appelIA;
-  const message = messageFactice({ contenu: 'oTa, appelle Léa', id: 'u-call-1', guildId: 'G-CALL' });
-  await messageCreate.executer(client, message);
-  assert.strictEqual(appelIA, avant, 'un appel de membre ne doit pas partir dans l’IA');
-  const texte = message.channel.messagesEnvoyes.at(-1).embeds[0].toJSON().description;
-  assert.ok(texte.includes('Pour quelle raison'), 'Otaku doit réclamer la raison');
-  require('../utils/appels').viderEtats();
+  const rep = message.channel.messagesEnvoyes.at(-1);
+  assert.ok(rep, 'une réponse doit partir');
+  assert.notStrictEqual(rep.allowedMentions?.repliedUser, false, 'le ping retour est voulu par le staff');
 });
 
 module.exports = { nom: 'messages', cas };

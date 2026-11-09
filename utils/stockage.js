@@ -67,7 +67,7 @@ const REGLAGES_DEFAUT = {
   },
   journal: { suppressions: true, modifications: true, sorties: true },
   muteRole: null,
-  ia: { active: true, salonBloques: [], consigne: '', repondreQuestions: true, appels: true },
+  ia: { active: true, salonBloques: [], consigne: '' },
 };
 
 function tousLesReglages() {

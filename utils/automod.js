@@ -15,9 +15,10 @@ const INSULTES = [
   'lopette', 'merdeux', 'mrd', 'nique', 'shitty', 'nq', 'ntm', 'pd', 'pede',
   'pedophile', 'pedo', 'petasse', 'putain', 'pute', 'ptn', 'ptnk', 'sg', 'suce', 'salop',
   'salaud', 'ta gueule', 'teub', 'teubon', 'tg', 'trouduc', 'trouducul', 'va te faire',
-  'viol', 'violeur', 'zgueg', 'zob',
+  'viol', 'violeur', 'zgueg', 'zob', 'minable', 'nenette', 'levrette', 'noob', 'keum', 'kheum', 'stfu', 'schluck',
   // expressions
-  'fils de pute', 'fille de pute', 'trou du cul', 'vas y encule', 'sale ordure', 'sales ordures',
+  'fils de pute', 'fille de pute', 'trou du cul', 'trou de balle', 'vas y encule', 'sale ordure', 'sales ordures',
+  'es attarde', 'attarde',
   // anglais (les mêmes mots reviennent dans les serves FR gaming)
   'arse', 'arsehole', 'asshole', 'asshat', 'asswipe', 'bastard', 'bitch', 'btch',
   'bullshit', 'cunt', 'dick', 'dickhead', 'dickwad', 'dipshit', 'douchebag', 'dumbass',
@@ -58,6 +59,11 @@ const LIENS_MALVEILLANTS = [
   { regex: /\bsteam\b.{0,25}\b(gift|cadeau|credit|crédit|argent)\b/i, raison: 'arnaque Steam' },
   { regex: /\b(gift|cadeau)\b.{0,25}\bsteam\b/i, raison: 'arnaque Steam' },
   { regex: /discord?app\.(com|net)\/(gift|giveaway)|dliscord|dsicord|qnitro|gift-?gg|g1ft/i, raison: 'faux lien Discord' },
+  { regex: /d[i1l]?sc[o0]rd[a-z]{0,3}\.(?:gg|me|io|net|com|xyz|top|click)\b/i, raison: 'faux domaine Discord' },
+  { regex: /(?:https?:\/\/|www\.)?\S*\b(?:linkvertise|adf\.ly|tinyurl|bit\.ly|cutt\.ly|is\.gd|rb\.gy|oi\.io|shorte\.st|saytr|sussiste|loot-?link|lootfun|mitly|clink\.site|v\.gs|b\.td)\b/i, raison: 'raccourcisseur qui masque la destination' },
+  { regex: /\bdisc[o0]rd[-.]?(?:nitro|premium|gift|gifts|shop|store|claim|redeem)\b/i, raison: 'fausse boutique Nitro' },
+  { regex: /\b(?:nitro|premium)\b.{0,20}\b(?:gratuit|free|claim|cadeau|\S{0,2}rer\b.*(?:lien|click|site)|r\S{1,2}cup\S{1,3}rer)/i, raison: 'faux cadeau Nitro' },
+  { regex: /\b(?:compte|account)\b.{0,30}(?:suspendu|banni|suspended|banned).{0,60}(?:formulaire|recours|appel|recover|restore|appeal)/i, raison: 'faux recours de compte' },
   { regex: /airdrop.{0,20}(crypto|token|wallet)|connect.{0,12}wallet|reconnect.{0,12}(your )?account/i, raison: 'arnaque crypto' },
   { regex: /(vérifie|verifie|confirme).{0,18}(compte|account).{0,40}(nitro|banni|suspendu|interdit)/i, raison: 'fausse vérification de compte' },
 ];
@@ -66,7 +72,7 @@ const LIENS_MALVEILLANTS = [
 function lienMalveillant(texte) {
   const contenu = String(texte || '');
   const aUnLien = /(?:https?:\/\/|www\.)\S+/i.test(contenu)
-    || /\b[a-z0-9-]+\.(?:tk|ml|ga|cf|gq|xyz|top|click|icu|sbs)\b/i.test(contenu)
+    || /\b[a-z0-9-]+\.(?:tk|ml|ga|cf|gq|xyz|top|click|icu|sbs|cyou|beauty|monster|quest|zilla|lol|zip)\b/i.test(contenu)
     // lien écrit en clair, sans http:// (fréquent dans les spams) :
     || /\b[a-z0-9-]+(?:-[a-z0-9-]+)*\.(?:com|net|org|gg|io|fr|shop|store|site|online|live)\b/i.test(contenu);
   if (!aUnLien) return null;
@@ -80,10 +86,20 @@ function contientInvitation(texte) {
   return INVITATION.test(String(texte || ''));
 }
 
-/** Nombre de liens (hors pièces jointes Discord). */
+/** Nombre de liens : http(s)://, www., et domaines écrits nus (fréquent chez les spammeurs). */
 function compteLiens(texte) {
-  const trouve = String(texte || '').match(URL_MOTIF);
-  return trouve ? trouve.length : 0;
+  const brut = String(texte || '');
+  const urls = (brut.match(URL_MOTIF) || []).length;
+  const reste = brut.replace(URL_MOTIF, ' ');
+  const nues = (reste.match(/\b[a-z0-9][a-z0-9-]*\.(?:com|net|org|fr|gg|io|sh|to|be|tv|me|co|xyz|ru|cn|tk|ml|ga|cf|gq|top|live|link|site|online|shop|store|click|icu|sbs|cyou|beauty|monster)\b/gi) || []).length;
+  return urls + nues;
+}
+
+/** Flood : un même caractère répété 12 fois de suite, ou un mot répété 7 fois (hors liens). */
+function floodDeCaracteres(texte) {
+  const nu = String(texte || '').replace(/(?:https?:\/\/|www\.)\S+/gi, ' ');
+  if (/([a-zA-ZÀ-ÿ0-9!?.])\1{11,}/.test(nu.replace(/\s+/g, ''))) return true;
+  return /\b([a-zA-ZÀ-ÿ0-9]{3,})\b(?:\s+\1\b){6,}/i.test(nu);
 }
 
 /** Renvoie la racine d'insulte trouvée, ou null. Gère pluriels/féminin/verbes sans faux positifs. */
@@ -161,6 +177,10 @@ function analyser(texte, options = {}) {
     }
   }
 
+  if (reglages.spam !== false && floodDeCaracteres(contenu)) {
+    return { action: 'supprimer', raison: 'flood de caractères', details: {} };
+  }
+
   if (reglages.majuscules && tropDeMajuscules(contenu)) {
     return { action: 'alerter', raison: 'trop de majuscules', details: {} };
   }
@@ -176,6 +196,7 @@ function salonExempt(channelId, reglagesAutomod = {}) {
 module.exports = {
   INSULTES,
   normaliser,
+  floodDeCaracteres,
   contientInvitation,
   lienMalveillant,
   compteLiens,

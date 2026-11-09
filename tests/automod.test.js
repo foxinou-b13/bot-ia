@@ -151,5 +151,43 @@ test('le vocabulaire du quotidien ne tombe jamais dans le panneau', () => {
   assert.strictEqual(automod.insulteTrouvee('ce film est violent et les_connards_dans_la_salle rient'), 'connard');
 });
 
+test('insultes : les nouvelles formes gaming tombent', () => {
+  for (const t of ['t\'es qu\'un minable', 'sale noob', 'n00b', 't\'es une nenette', 'stfu', 'kheum de merde', 't\'es un attardé']) {
+    assert.ok(automod.insulteTrouvee(t), `manquant : ${t}`);
+  }
+});
+
+test('insultes : les nouveaux mots ne mordent pas sur le français normal', () => {
+  for (const t of ['je ne vais pas m\'attarder', 'le nouveau patch est nul', 'on a gagné sans chichi',
+    'la minoterie tourne bien', 'stfuvem pas qui je suis']) {
+    assert.strictEqual(automod.insulteTrouvee(t), null, `faux positif : ${t}`);
+  }
+});
+
+test('flood : caractères ou mots répétés en masse → suppression', () => {
+  assert.ok(automod.floodDeCaracteres('aaaaaaaaaaaaaa'));
+  assert.ok(automod.floodDeCaracteres('non non non non non non non non'));
+  assert.ok(!automod.floodDeCaracteres('je viens au stream ce soir ?'), 'phrase normale = pas du flood');
+  assert.ok(!automod.floodDeCaracteres('https://exemple.com/page?x=aaaaaaaaaaaa'), 'les liens ne sont pas du flood');
+  const r = automod.analyser('AAAAAAAAAAAAAAA', { reglages: { spam: true } });
+  assert.strictEqual(r.raison, 'flood de caractères');
+});
+
+test('liens : masques de redirection et fausses boutiques détectés', () => {
+  assert.ok(automod.lienMalveillant('clique ici http://bit.ly/3x9F pour ton nitro'));
+  assert.ok(automod.lienMalveillant('récupère https://linkvertise.com/9987/gift'));
+  assert.ok(automod.lienMalveillant('visite https://discord-nitro.shop pour claim'));
+  assert.ok(automod.lienMalveillant('ton compte a été suspendu, remplis ce formulaire https://verif.moncompte.cyou'));
+  assert.ok(automod.lienMalveillant('rejoins dliscord.gg/main'));
+  assert.strictEqual(automod.lienMalveillant('mon stream est sur twitch.tv/paul'), null);
+});
+
+test('liens écrits nus sont comptés comme les vrais liens', () => {
+  assert.strictEqual(automod.compteLiens('va sur exemple.com puis test.fr'), 2);
+  assert.strictEqual(automod.compteLiens('https://a.fr et https://b.fr et exemple.com'), 3);
+  const r = automod.analyser('a.com b.com c.com d.com', { reglages: { liens: true } });
+  assert.strictEqual(r.raison, 'trop de liens');
+});
+
 module.exports = { nom: 'automod', cas };
 if (require.main === module) require('./executeur')(module.exports);

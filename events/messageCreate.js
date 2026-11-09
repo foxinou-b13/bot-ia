@@ -125,27 +125,6 @@ function salutVariation(guildId) {
   DERNIER_SALUT.set(guildId, idx);
   return SALUTS[idx];
 }
-
-// Questions posées « à voix haute » sans ping : vraies questions seulement, pause de 20 s par salon.
-const PAUSE_SANS_PING_MS = 20000;
-const DERNIER_SANS_PING = new Map();
-function questionSansPing(message, iaR, texteNu) {
-  if (iaR.active === false || iaR.repondreQuestions === false) return null;
-  if ((iaR.salonBloques || []).includes(message.channel.id)) return null;
-  const t = String(texteNu || '');
-  if (t.length < 8 || t.length > 350) return null;
-  if (message.mentions?.everyone) return null;
-  if ((message.mentions?.roles?.size || 0) > 0 || (message.mentions?.users?.size || 0) > 0) return null;
-  if (/@(?:everyone|here)|discord\.gg\//i.test(t)) return null;
-  const interrogatif = /\?\s*$/.test(t)
-    || /^(?:qui |que |quoi\b|quel|quelle|quels|quelles|comment|pourquoi|quand|combien|o[uù]\b|est[- ]ce que|est ce que|peut[- ]on|puis[- ]je|dois[- ]je|faut[- ]il|sais[- ]tu|savez[- ]vous|on peut|il y a|y a|c'?est quoi|tu connais|tu sais)/i.test(t);
-  if (!interrogatif) return null;
-  const maintenant = Date.now();
-  if (maintenant - (DERNIER_SANS_PING.get(message.channel.id) || 0) < PAUSE_SANS_PING_MS) return null;
-  DERNIER_SANS_PING.set(message.channel.id, maintenant);
-  return t;
-}
-
 module.exports = {
   nom: Events.MessageCreate,
 
@@ -189,7 +168,7 @@ module.exports = {
 
       const reglagesActifs = {
         ...reglages.automod,
-        spam: false,
+        spam: reglages.automod.spam,
         liens: reglages.automod.liens,
         insultes: reglages.automod.insultes,
         majuscules: reglages.automod.majuscules,
@@ -198,31 +177,20 @@ module.exports = {
       if (analyse) return;
     }
 
-    // ─── 2. Otaku est-il sollicité ? (mention, le mot « ota », ou une vraie question posée à voix haute) ───
+    // ─── 2. On l'appelle ou on se tait : mention obligatoire, ou le mot « ota » au début ───
     const texteNu = message.content.replace(/<@!?\d+>/g, ' ').replace(/\s+/g, ' ').trim();
     const estMention = Boolean(client.user && message.mentions.has(client.user.id));
     const motCle = /^o ?ta(?:ku|k|['’])?\b/i.test(texteNu);
     const interpele = estMention || motCle;
+    if (!interpele) return; // on ne l'appelle pas : il ne coupe pas la conversation
 
-    // ─── 2a. appel d'un membre (« ota, appelle Jordan ») ───
-    try {
-      const appels = require('../utils/appels');
-      if (await appels.traiterMessage(message, reglages.ia || {}, { interpele })) return;
-    } catch (erreur) { console.warn('⚠️ Appel membre :', erreur.message); }
-
-    let question = null;
-    if (interpele) {
-      question = estMention
-        ? message.content.replace(/<@!?\d+>/g, ' ').replace(/\s+/g, ' ').trim()
-        : texteNu.replace(/^o ?ta(?:ku|k|['’])?\b[ ,.;:!]*/i, '').trim();
-      if (!question) {
-        // juste « ota » ou une mention seule : on répond, et JAMAIS deux fois la même phrase
-        return message.reply({ embeds: [panneaux.info('👋 Je suis là', salutVariation(message.guild.id))] })
-          .catch(() => null);
-      }
-    } else {
-      question = questionSansPing(message, reglages.ia || {}, texteNu);
-      if (!question) return;
+    const question = estMention
+      ? message.content.replace(/<@!?\d+>/g, ' ').replace(/\s+/g, ' ').trim()
+      : texteNu.replace(/^o ?ta(?:ku|k|['’])?\b[ ,.;:!]*/i, '').trim();
+    if (!question) {
+      // juste « ota » ou une mention seule : il répond, et JAMAIS deux fois la même phrase
+      return message.reply({ embeds: [panneaux.info('👋 Je suis là', salutVariation(message.guild.id))] })
+        .catch(() => null);
     }
 
     // ─── sécurité pro : filtre avant appel IA (réglages + salon + sujet) ───
@@ -295,7 +263,8 @@ module.exports = {
         .setColor(panneaux.COULEUR)
         .setDescription(morceaux[0])
         .setTimestamp();
-      await message.reply({ embeds: [carte], allowedMentions: { repliedUser: false } }).catch(() => null);
+      // la réponse ping en retour celui qui a posé la question
+      await message.reply({ embeds: [carte] }).catch(() => null);
       for (const suite of morceaux.slice(1)) {
         await message.channel.send({
           embeds: [new (require('discord.js').EmbedBuilder)()

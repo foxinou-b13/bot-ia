@@ -37,7 +37,7 @@ const config = {
   },
   ia: {
     temperature: parseFloat(process.env.IA_TEMPERATURE || '0.7'),
-    maxTokens: nombre(process.env.IA_MAX_TOKENS, 900),
+    maxTokens: nombre(process.env.IA_MAX_TOKENS, 1200),
     memoire: nombre(process.env.IA_MEMOIRE, 12),          // messages gardés par salon
     limiteParMinute: nombre(process.env.IA_LIMITE_MINUTE, 6),
     pause: nombre(process.env.IA_PAUSE_MS, 15000),        // anti-flood côté utilisateur
@@ -54,7 +54,7 @@ const config = {
 
   // ─── hébergement ───
   port: nombre(process.env.PORT, 3000),
-  version: '1.8.0',
+  version: '1.9.0',
   debut: Date.now(),
 };
 

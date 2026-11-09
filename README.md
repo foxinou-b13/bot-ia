@@ -176,19 +176,18 @@ Tape `/config` : un menu « Que veux-tu configurer ? » avec 5 sections ; chaque
 - **⚖️ Sanctions** : punition automatique après X avertissements.
 - **🤖 IA** : couper/réactiver par salon, personnalité (formulaire), oublier la mémoire.
 
-## Répondre à voix haute et appeler un membre (v1.8.0)
+## Otaku répond quand on l'appelle (v1.9.0)
 
-- **Plus besoin d'être pingué** : écris « **ota**, ta question » et Otaku répond (mention toujours acceptée aussi).
-- **« ota » tout seul** ne renvoie jamais la même formule deux fois de suite — fini le robot répété.
-- **Questions sans ping** : si le réglage est actif (`/config` → 🤖 IA → 📣 Répondre sans être pingé),
-  une vraie question posée dans le salon (« comment on… ? », « pourquoi… ? ») reçoit une réponse.
-  Jamais sur les phrases ordinaires, pause de 20 s par salon, les salons coupés restent silencieux.
-- **🫵 Appeler un membre** : « ota, appelle Jordan » → Otaku demande **la raison** (obligatoire, elle reste
-  dans le message), cherche les prénoms qui ressemblent, fait choisir dans un **menu privé** s'ils sont
-  plusieurs, puis écrit dans le salon : « 📣 @Jordan — X te cherche : "raison" ». Les bots et soi-même
-  ne sont jamais pingés ; une ligne sobre part au journal du staff. Tout se règle dans
-  `/config` → 🤖 IA → 🫵 Appeler un membre.
-- La consigne de l'IA interdit désormais de répéter une réponse mot pour mot : reformulation obligatoire.
+- **Il ne se mêle de rien sans être appelé** : une @mention ou le mot « **ota** » en début de message
+  (ou « otaku ») déclenche la réponse ; rien d'autre. Sa réponse **ping en retour** la personne qui l'a appelé.
+- **Vraie IA branchée** : Groq (`qwen/qwen3.8-27b`) en principal, Gemini en secours — bascule automatique
+  si un modèle tombe. Clés dans les variables d'environnement (`GROQ_API_KEY`, `GEMINI_API_KEY`), jamais dans git.
+- **Il ne radote pas** : consigne stricte de reformuler, et les saluts « je suis là » tournent sans se répéter.
+- **Auto-mod renforcé** : nouvelles insultes gaming FR/EN (noob, minable, stfu, keum…), flood de caractères
+  et de mots répétés, liens écrits nus (sans http://) comptés, raccourcisseurs douteux (bit.ly, linkvertise…),
+  fausses boutiques Nitro, faux domaines « discord-like » et TLDs de fraude récents (.cyou, .beauty…).
+- Retirés depuis v1.8 : le système « appeler un membre » et les réponses automatiques sans ping —
+  Otaku n'intervient que lorsqu'on s'adresse à lui.
 
 ## /guide (public)
 Carte des repères (règles, contact du staff, accueil). L'IA (`/ask`, mention) reçoit les mêmes liens et répond
